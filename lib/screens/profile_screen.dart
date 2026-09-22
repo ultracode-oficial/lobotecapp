@@ -6,6 +6,7 @@ import '../features/auth/domain/entities/user_entity.dart';
 import '../features/auth/presentation/bloc/auth_bloc.dart';
 import '../features/auth/presentation/bloc/auth_event.dart';
 import '../features/auth/presentation/bloc/auth_state.dart';
+import '../widgets/custom_drawer.dart';
 import '../widgets/status_badge.dart';
 import 'change_password_screen.dart';
 
@@ -71,6 +72,7 @@ class ProfileScreen extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: AppColors.background,
+          drawer: const CustomDrawer(),
           appBar: AppBar(
             backgroundColor: AppColors.primary,
             title: const Text('Meu Perfil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

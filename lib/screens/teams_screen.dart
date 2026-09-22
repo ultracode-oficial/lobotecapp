@@ -10,6 +10,7 @@ import '../features/execution/data/models/step_model.dart';
 import '../features/execution/presentation/bloc/agenda/agenda_bloc.dart';
 import '../features/execution/presentation/bloc/agenda/agenda_event.dart';
 import '../features/execution/presentation/bloc/agenda/agenda_state.dart';
+import '../widgets/custom_drawer.dart';
 import '../widgets/status_badge.dart';
 
 class TeamsScreen extends StatelessWidget {
@@ -144,6 +145,7 @@ class _TeamsView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: const CustomDrawer(),
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         title: const Text(

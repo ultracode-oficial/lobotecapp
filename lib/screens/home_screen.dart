@@ -4,11 +4,11 @@ import '../core/colors.dart';
 import '../core/di/injection_container.dart';
 import '../core/state.dart';
 import '../features/auth/presentation/bloc/auth_bloc.dart';
-import '../features/auth/presentation/bloc/auth_event.dart';
 import '../features/auth/presentation/bloc/auth_state.dart';
 import '../features/execution/presentation/bloc/dashboard/dashboard_bloc.dart';
 import '../features/execution/presentation/bloc/dashboard/dashboard_event.dart';
 import '../features/execution/presentation/bloc/dashboard/dashboard_state.dart';
+import '../widgets/custom_drawer.dart';
 import '../widgets/status_badge.dart';
 import 'agenda_screen.dart';
 import 'profile_screen.dart';
@@ -854,85 +854,3 @@ class _HomeContentState extends State<_HomeContent>
   }
 }
 
-class CustomDrawer extends StatelessWidget {
-  const CustomDrawer({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(color: AppColors.primary),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Image.asset('assets/images/logo.png', height: 40),
-                const SizedBox(height: 12),
-                const Text(
-                  'Grupo LoboRJ',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const Text(
-                  'Técnico Mobile',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.home, color: AppColors.primary),
-            title: const Text('Home'),
-            onTap: () {
-              Navigator.pop(context);
-              AppState().setHomeIndex(0);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.calendar_month, color: AppColors.primary),
-            title: const Text('Agenda'),
-            onTap: () {
-              Navigator.pop(context);
-              AppState().setHomeIndex(1);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.assignment, color: AppColors.primary),
-            title: const Text('Ordens de Serviço'),
-            onTap: () {
-              Navigator.pop(context);
-              AppState().setHomeIndex(2);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.group, color: AppColors.primary),
-            title: const Text('Equipes'),
-            onTap: () {
-              Navigator.pop(context);
-              AppState().setHomeIndex(3);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.person, color: AppColors.primary),
-            title: const Text('Meu Perfil'),
-            onTap: () {
-              Navigator.pop(context);
-              AppState().setHomeIndex(4);
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: AppColors.error),
-            title: const Text('Sair', style: TextStyle(color: AppColors.error)),
-            onTap: () {
-              Navigator.pop(context);
-              context.read<AuthBloc>().add(AuthLogoutRequested());
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
