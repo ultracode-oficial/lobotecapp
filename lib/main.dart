@@ -55,7 +55,7 @@ class _AuthGate extends StatelessWidget {
           return const _SplashScreen();
         }
 
-        if (state is AuthAuthenticated) {
+        if (state is AuthAuthenticated || state is AuthPasswordChanged) {
           return const HomeScreen();
         }
 
@@ -64,7 +64,7 @@ class _AuthGate extends StatelessWidget {
         }
 
         if (state is AuthPasswordChangeRequired) {
-          return ChangePasswordScreen(user: state.user);
+          return ChangePasswordScreen(user: state.user, isMandatory: true);
         }
 
         return const LoginScreen();
