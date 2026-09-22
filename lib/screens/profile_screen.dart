@@ -411,7 +411,7 @@ class ProfileScreen extends StatelessWidget {
               if (user != null) {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => ChangePasswordScreen(user: user),
+                    builder: (_) => ChangePasswordScreen(user: user, isMandatory: false),
                   ),
                 );
               }

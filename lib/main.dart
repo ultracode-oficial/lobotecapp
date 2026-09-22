@@ -64,7 +64,7 @@ class _AuthGate extends StatelessWidget {
         }
 
         if (state is AuthPasswordChangeRequired) {
-          return ChangePasswordScreen(user: state.user);
+          return ChangePasswordScreen(user: state.user, isMandatory: true);
         }
 
         return const LoginScreen();

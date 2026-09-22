@@ -5,13 +5,16 @@ import '../features/auth/domain/entities/user_entity.dart';
 import '../features/auth/presentation/bloc/auth_bloc.dart';
 import '../features/auth/presentation/bloc/auth_event.dart';
 import '../features/auth/presentation/bloc/auth_state.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/custom_text_field.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   final UserEntity user;
+  final bool isMandatory;
 
-  const ChangePasswordScreen({super.key, required this.user});
+  const ChangePasswordScreen({
+    super.key,
+    required this.user,
+    this.isMandatory = false,
+  });
 
   @override
   State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
@@ -22,6 +25,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _newController = TextEditingController();
   final _confirmController = TextEditingController();
 
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+
   @override
   void dispose() {
     _currentController.dispose();
@@ -31,20 +38,46 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   void _submit() {
-    final current = _currentController.text;
-    final newPass = _newController.text;
-    final confirm = _confirmController.text;
+    final current = _currentController.text.trim();
+    final newPass = _newController.text.trim();
+    final confirm = _confirmController.text.trim();
 
     if (current.isEmpty || newPass.isEmpty || confirm.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preencha todos os campos.')),
+        const SnackBar(
+          content: Text('Por favor, preencha todos os campos.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (newPass.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A nova senha deve ter no mínimo 8 caracteres.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (current == newPass) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A nova senha não pode ser idêntica à senha atual.'),
+          backgroundColor: AppColors.warning,
+        ),
       );
       return;
     }
 
     if (newPass != confirm) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A nova senha e a confirmação não coincidem.')),
+        const SnackBar(
+          content: Text('A nova senha e a confirmação não coincidem.'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
@@ -60,92 +93,249 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: BlocBuilder<AuthBloc, AuthState>(
-        builder: (context, state) {
-          final isLoading = state is AuthLoading;
+    return BlocConsumer<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        } else if (state is AuthAuthenticated) {
+          if (!widget.isMandatory) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Senha alterada com sucesso!'),
+                backgroundColor: AppColors.success,
+              ),
+            );
+            Navigator.of(context).pop();
+          }
+        }
+      },
+      builder: (context, state) {
+        final isLoading = state is AuthLoading;
 
-          return SafeArea(
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: widget.isMandatory
+              ? null
+              : AppBar(
+                  backgroundColor: AppColors.primary,
+                  elevation: 0,
+                  title: const Text(
+                    'Alterar Senha',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+          body: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 40),
-                  const Icon(
-                    Icons.lock_reset_rounded,
-                    size: 64,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Troca de Senha Obrigatória',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Olá, ${widget.user.name.split(' ').first}! Para continuar, você precisa definir uma nova senha.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.5,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 40),
-                  CustomTextField(
-                    label: 'Senha Atual',
-                    hint: 'Insira sua senha atual',
-                    isPassword: true,
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    controller: _currentController,
-                    enabled: !isLoading,
-                  ),
-                  const SizedBox(height: 20),
-                  CustomTextField(
-                    label: 'Nova Senha',
-                    hint: 'Mínimo 8 caracteres',
-                    isPassword: true,
-                    prefixIcon: const Icon(Icons.lock_open_rounded),
-                    controller: _newController,
-                    enabled: !isLoading,
-                  ),
-                  const SizedBox(height: 20),
-                  CustomTextField(
-                    label: 'Confirmar Nova Senha',
-                    hint: 'Repita a nova senha',
-                    isPassword: true,
-                    prefixIcon: const Icon(Icons.check_circle_outline),
-                    controller: _confirmController,
-                    enabled: !isLoading,
-                  ),
-                  const SizedBox(height: 32),
-                  isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : CustomButton(
-                          text: 'Definir Nova Senha',
-                          onPressed: _submit,
-                        ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: isLoading
-                        ? null
-                        : () => context.read<AuthBloc>().add(AuthLogoutRequested()),
-                    child: const Text(
-                      'Sair',
-                      style: TextStyle(color: AppColors.textSecondary),
+                  SizedBox(height: widget.isMandatory ? 30 : 10),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.lock_reset_rounded,
+                        size: 52,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  Text(
+                    widget.isMandatory
+                        ? 'Troca de Senha Obrigatória'
+                        : 'Atualizar Senha de Acesso',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.isMandatory
+                        ? 'Olá, ${widget.user.name.split(' ').first}! Por segurança institucional, você precisa definir uma nova senha para acessar o aplicativo.'
+                        : 'Defina uma senha segura com no mínimo 8 caracteres para proteger o seu acesso.',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Card do Formulário
+                  Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildPasswordField(
+                            label: 'Senha Atual',
+                            hint: 'Digite sua senha atual',
+                            controller: _currentController,
+                            obscureText: _obscureCurrent,
+                            enabled: !isLoading,
+                            onToggleVisibility: () {
+                              setState(() {
+                                _obscureCurrent = !_obscureCurrent;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          _buildPasswordField(
+                            label: 'Nova Senha',
+                            hint: 'Mínimo de 8 caracteres',
+                            controller: _newController,
+                            obscureText: _obscureNew,
+                            enabled: !isLoading,
+                            onToggleVisibility: () {
+                              setState(() {
+                                _obscureNew = !_obscureNew;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          _buildPasswordField(
+                            label: 'Confirmar Nova Senha',
+                            hint: 'Repita a nova senha',
+                            controller: _confirmController,
+                            obscureText: _obscureConfirm,
+                            enabled: !isLoading,
+                            onToggleVisibility: () {
+                              setState(() {
+                                _obscureConfirm = !_obscureConfirm;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Botão de Envio
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: isLoading ? null : _submit,
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              widget.isMandatory ? 'Definir Nova Senha' : 'Salvar Nova Senha',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ),
+
+                  // Botão Sair se for Obrigatório
+                  if (widget.isMandatory) ...[
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: isLoading
+                          ? null
+                          : () => context.read<AuthBloc>().add(AuthLogoutRequested()),
+                      child: const Text(
+                        'Sair da Conta',
+                        style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPasswordField({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    required bool obscureText,
+    required bool enabled,
+    required VoidCallback onToggleVisibility,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          obscureText: obscureText,
+          enabled: enabled,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary, size: 20),
+            suffixIcon: IconButton(
+              icon: Icon(
+                obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                color: AppColors.textSecondary,
+                size: 20,
+              ),
+              onPressed: onToggleVisibility,
+            ),
+            filled: true,
+            fillColor: AppColors.background,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
