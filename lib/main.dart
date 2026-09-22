@@ -9,6 +9,7 @@ import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/mfa_screen.dart';
 import 'screens/change_password_screen.dart';
+import 'core/services/permission_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,8 +34,21 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class _AuthGate extends StatelessWidget {
+class _AuthGate extends StatefulWidget {
   const _AuthGate();
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PermissionService.requestAppPermissions();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

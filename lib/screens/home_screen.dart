@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../core/colors.dart';
 import '../core/di/injection_container.dart';
 import '../core/services/location_service.dart';
+import '../core/services/permission_service.dart';
 import '../core/state.dart';
 import '../features/auth/presentation/bloc/auth_bloc.dart';
 import '../features/auth/presentation/bloc/auth_state.dart';
@@ -30,7 +31,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    getIt<LocationService>().startTracking();
+    _initPermissionsAndTracking();
+  }
+
+  Future<void> _initPermissionsAndTracking() async {
+    await PermissionService.requestAppPermissions();
+    if (mounted) {
+      getIt<LocationService>().startTracking();
+    }
   }
 
   final List<Widget> _pages = [
