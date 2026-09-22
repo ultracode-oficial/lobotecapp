@@ -1,0 +1,27 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-primary: #273c6a;
+  --color-primary-hover: #375393;
+  --color-primary-active: #172441;
+  --color-primary-muted: #eef1f6;
+  --color-primary-contrast: #ffffff;
+
+  --color-secondary: #42c2ff;
+  --color-secondary-hover: #1ab0f5;
+  --color-secondary-active: #0090d4;
+  --color-secondary-muted: #e6f7ff;
+  --color-secondary-contrast: var(--color-primary);
+
+  --animate-grow-side: grow-side 4.9s ease-out forwards;
+
+  @keyframes grow-side {
+    0% {
+      transform: scaleX(0);
+    }
+
+    100% {
+      transform: scaleX(1);
+    }
+  }
+}

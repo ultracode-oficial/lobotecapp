@@ -1,0 +1,120 @@
+// lembrete para configuração de proxy reverso:
+  /api -> backend
+  /app -> backend
+  /apps -> backend
+  /broadcasting -> backend
+  /* -> frontend
+
+TODO's:
+  DONE - Autenticação JWT
+  DONE - Login
+  DONE - Auto refresh token
+  DONE - MFA
+  DONE - Recuperar Senha
+  DONE - Spatie Permissions & Roles
+  DONE - Developer Super User
+  DONE - Foto do user do topbar
+  DONE - Meu Perfil (Foto, Nome, E-mail, CPF, Telefone)
+  DONE - Sidebar Links
+  DONE - Topbar
+  DONE - System Notifications (success, error, warning, info)
+  DONE - Login MFA: Recovery Code
+  DONE - Segurança da Conta (Trocar Senha, MFA Setup)
+  DONE - Exigir Ativação de MFA (mfa_required, middleware)
+  DONE - Exigir Troca de Senha (change_password_required, middleware)
+  DONE - Notifications (message, style, user_id, resource_type, resource_id)
+  DONE - Sino de Notificações
+  DONE - Página "Central de Notificações"
+  DONE - UI DataTable (paginação, pesquisa, filtros, ordenação)
+  DONE - Usuários (CRUD, contém Especializações, contém VendedorConfig)
+  DONE - VendedorConfig (pertence a Usuários: Vendedor/Representante): tipo de comissão, valor fixo, porcentagem
+  DONE - Cleanup UI (cores, páginas, etc)
+  DONE - Equipes (contém Usuários: Técnico)
+  DONE - Configurar Deploy e Implantar
+  DONE - Configuração: Especializações (pertence a Usuários: Técnico)
+  DONE - Configuração: Tipos de Serviço (pertence a Serviços ou Contratos)
+  DONE - Configuração: Tipos de Tarefa (pertence a Tarefas)
+  DONE - Configuração: Tipos de Equipamento
+  DONE - Configuração: Cargos e Permissões
+  DONE - Clientes
+  DONE - Auditoria e SoftDeletes
+
+  - CRUD Equipamentos (pertence a Cliente, pertence a Etapas)
+  - Contratos (contém Serviços)
+    // EspecializacaoContrato (Especializações que pertencem a Serviços ou Contratos)
+    // TipoServicoContrato (Especializações que pertencem a Serviços ou Contratos)
+  - Serviços (pertence a Cliente ou Contrato, contém HistoricoAcao, contém MovimentoEstoque, contém OrcamentoEstoque)
+    // EspecializacaoServico (Especializações que pertencem a Serviços ou Contratos)
+    // TipoServicoServico (Tipos de Serviço que pertencem a Serviços ou Contratos)
+    // TipoTarefaServico (Tipos de Tarefa que pertencem a Serviços ou Contratos)
+  - Pagamentos (pertence a Serviços, pertence a Contratos)
+  - Etapas (pertence a Serviços, contém Equipamentos, contém HistoricoAcao, contém MovimentoEstoque, contém OrcamentoEstoque)
+  - Checklist (pertence a Equipamento + Etapa)
+  - Feature: Oportunidades = Checklists com "problema identificado" preenchido, confirmação de leitura
+  - Tarefas (pertence a Equipamento + Etapa + TipoTarefa)
+
+  - Agenda (Etapas) (Legendas, visualização em modo Mês/Semana/Dia, interações com os recursos marcados e células)
+
+  - Módulo de Estoque
+    - ItemEstoque
+    - CategoriaEstoque
+    - LocalEstoque
+    - MovimentoEstoque (opcional: pertence a Serviço, pertence a Etapa)
+
+  - Módulo de Relatórios
+  - Dashboards
+
+// Sidebar Links:
+  - Home (todos)
+  - Agenda       (VER_AGENDA)       (Vendedor, Administrador)
+  - Serviços     (VER_SERVICOS)     (Administrador)
+  - Contratos    (VER_CONTRATOS)    (Administrador)
+  - Clientes     (VER_CLIENTES)     (Vendedor, Administrador)
+  - Equipes      (VER_EQUIPES)      (Administrador)
+  - Usuários     (VER_USUARIOS) (Administrador)
+  - Estoque      (VER_ESTOQUE) (Administrador)
+  - Relatórios   (Vendedores, Finanças, Estoque) (VER_RELATORIOS)   (Administrador, Financeiro)
+
+// Roles e Permissões
+  - Técnico:
+    - ACESSO_MOBILE
+    - Ver Agenda
+    - Ver Serviços
+    - Executar Serviços (check-in, checklist, preencher detalhes de equipamento)
+
+  - Vendedor:
+    - ACESSO_WEB
+    - Ver Agenda
+    - Ver Clientes
+    - Ver Oportunidades
+    - Criar Clientes (cadastro, indicar equipamentos iniciais)
+    - Gerir Clientes (editar informações de cadastro)
+    - Criar Serviços (edita apenas serviços não confirmados)
+    - Criar Contratos (edita apenas contratos não confirmados)
+    - Criar Equipamentos (apenas indica quantidade)
+
+  - Administrador:
+    - ACESSO_WEB
+    - Ver Configurações
+    - Gerir Configurações
+    - Ver Agenda
+    - Ver Clientes
+    - Ver Oportunidades
+    - Ver Relatórios
+    - Gerir Clientes (edita info)
+    - Gerir Equipamentos
+    - Ver Serviços
+    - Gerir Serviços
+    - Ver Contratos
+    - Gerir Contratos
+    - Criar Serviço Emergencial
+    - Ver Equipes
+    - Gerir Equipes
+    - Ver Pagamentos
+    - Gerir Pagamentos
+
+  - Financeiro:
+    - ACESSO_WEB
+    - Ver Relatórios
+    - Ver Pagamentos
+    - Gerir Pagamentos
