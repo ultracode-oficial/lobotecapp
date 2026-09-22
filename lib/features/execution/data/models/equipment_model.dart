@@ -1,6 +1,21 @@
 import 'checklist_model.dart';
 import 'task_model.dart';
 
+bool _toBool(dynamic val, {bool defaultValue = false}) {
+  if (val == null) return defaultValue;
+  if (val is bool) return val;
+  if (val == 1 || val == '1' || val == 'true') return true;
+  if (val == 0 || val == '0' || val == 'false') return false;
+  return defaultValue;
+}
+
+int? _toInt(dynamic val) {
+  if (val == null) return null;
+  if (val is num) return val.toInt();
+  if (val is String) return int.tryParse(val);
+  return null;
+}
+
 class EquipmentModel {
   final int id; // ID de EquipamentoServico
   final int? equipamentoId;
@@ -46,6 +61,9 @@ class EquipmentModel {
   bool get isEmAndamento => status == 'EM_ANDAMENTO';
 
   factory EquipmentModel.fromJson(Map<String, dynamic> json) {
+    if (json.containsKey('data') && json['data'] is Map) {
+      json = Map<String, dynamic>.from(json['data'] as Map);
+    }
     var rawTarefas = json['tarefas'];
     List<TaskModel> tarefasList = [];
     if (rawTarefas is List) {
@@ -57,28 +75,30 @@ class EquipmentModel {
 
     String? tipo;
     if (json['tipo_equipamento'] is Map) {
-      tipo = json['tipo_equipamento']['nome'] as String?;
+      tipo = json['tipo_equipamento']['name']?.toString() ??
+          json['tipo_equipamento']['nome']?.toString();
     } else if (json['tipo_equipamento'] is String) {
       tipo = json['tipo_equipamento'] as String;
     }
 
+
     return EquipmentModel(
-      id: json['id'] as int? ?? 0,
-      equipamentoId: json['equipamento_id'] as int?,
-      tag: json['tag'] as String?,
-      isGeneric: json['is_generic'] as bool? ?? false,
-      registroPendente: json['registro_pendente'] as bool? ?? false,
-      checklistPendente: json['checklist_pendente'] as bool? ?? true,
-      cadastrado: json['cadastrado'] as bool? ?? false,
-      status: json['status'] as String? ?? 'AGUARDANDO',
-      marca: json['marca'] as String?,
-      modelo: json['modelo'] as String?,
+      id: _toInt(json['id']) ?? 0,
+      equipamentoId: _toInt(json['equipamento_id']),
+      tag: json['tag']?.toString(),
+      isGeneric: _toBool(json['is_generic'], defaultValue: false),
+      registroPendente: _toBool(json['registro_pendente'], defaultValue: false),
+      checklistPendente: _toBool(json['checklist_pendente'], defaultValue: true),
+      cadastrado: _toBool(json['cadastrado'], defaultValue: false),
+      status: json['status']?.toString() ?? 'AGUARDANDO',
+      marca: json['marca']?.toString(),
+      modelo: json['modelo']?.toString(),
       tipoEquipamento: tipo,
       btu: json['btu']?.toString(),
-      evaporadora: json['evaporadora'] as String?,
-      condensadora: json['condensadora'] as String?,
-      localizacao: json['localizacao'] as String?,
-      observacoes: json['observacoes'] as String?,
+      evaporadora: json['evaporadora']?.toString(),
+      condensadora: json['condensadora']?.toString(),
+      localizacao: json['localizacao']?.toString(),
+      observacoes: json['observacoes']?.toString(),
       tarefas: tarefasList,
       checklist: json['checklist'] != null && json['checklist'] is Map<String, dynamic>
           ? ChecklistModel.fromJson(json['checklist'] as Map<String, dynamic>)

@@ -27,6 +27,9 @@ class ChecklistModel {
   bool get hasProblema => statusEquipamento == 'PROBLEMA_IDENTIFICADO';
 
   factory ChecklistModel.fromJson(Map<String, dynamic> json) {
+    if (json.containsKey('data') && json['data'] is Map) {
+      json = Map<String, dynamic>.from(json['data'] as Map);
+    }
     return ChecklistModel(
       statusChecklist: json['status_checklist'] as String? ?? 'PENDENTE',
       statusEquipamento: json['status_equipamento'] as String?,

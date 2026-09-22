@@ -1,6 +1,20 @@
 import 'step_model.dart';
 import 'dashboard_model.dart';
 
+int? _toInt(dynamic val) {
+  if (val == null) return null;
+  if (val is num) return val.toInt();
+  if (val is String) return int.tryParse(val);
+  return null;
+}
+
+bool _toBool(dynamic val) {
+  if (val == null) return false;
+  if (val is bool) return val;
+  if (val == 1 || val == '1' || val == 'true') return true;
+  return false;
+}
+
 class ServiceOrderModel {
   final int id;
   final String numeroOs;
@@ -34,7 +48,45 @@ class ServiceOrderModel {
     this.etapas = const [],
   });
 
+  ServiceOrderModel copyWith({
+    int? id,
+    String? numeroOs,
+    String? status,
+    String? prioridade,
+    String? modalidade,
+    String? descricao,
+    ClienteResumoModel? cliente,
+    String? tipoServicoNome,
+    StepModel? proximaEtapa,
+    int? etapasClosed,
+    int? etapasTotal,
+    bool? podeFinalizarOs,
+    int? etapasAbertas,
+    List<StepModel>? etapas,
+  }) {
+    return ServiceOrderModel(
+      id: id ?? this.id,
+      numeroOs: numeroOs ?? this.numeroOs,
+      status: status ?? this.status,
+      prioridade: prioridade ?? this.prioridade,
+      modalidade: modalidade ?? this.modalidade,
+      descricao: descricao ?? this.descricao,
+      cliente: cliente ?? this.cliente,
+      tipoServicoNome: tipoServicoNome ?? this.tipoServicoNome,
+      proximaEtapa: proximaEtapa ?? this.proximaEtapa,
+      etapasClosed: etapasClosed ?? this.etapasClosed,
+      etapasTotal: etapasTotal ?? this.etapasTotal,
+      podeFinalizarOs: podeFinalizarOs ?? this.podeFinalizarOs,
+      etapasAbertas: etapasAbertas ?? this.etapasAbertas,
+      etapas: etapas ?? this.etapas,
+    );
+  }
+
   factory ServiceOrderModel.fromJson(Map<String, dynamic> json) {
+    if (json.containsKey('data') && json['data'] is Map) {
+      json = Map<String, dynamic>.from(json['data'] as Map);
+    }
+
     var rawEtapas = json['etapas'];
     List<StepModel> etapasList = [];
     if (rawEtapas is List) {
@@ -46,20 +98,21 @@ class ServiceOrderModel {
 
     String tipoNome = '';
     if (json['tipo_servico'] is Map) {
-      tipoNome = json['tipo_servico']['nome'] as String? ?? '';
+      tipoNome = (json['tipo_servico']['name'] ?? json['tipo_servico']['nome'])?.toString() ?? '';
     } else if (json['tipo_servico_nome'] is String) {
       tipoNome = json['tipo_servico_nome'] as String;
     }
 
+
     return ServiceOrderModel(
-      id: json['id'] as int? ?? 0,
-      numeroOs: json['numero_os'] as String? ??
-          json['identificador'] as String? ??
+      id: _toInt(json['id']) ?? 0,
+      numeroOs: json['numero_os']?.toString() ??
+          json['identificador']?.toString() ??
           '#${json['id']}',
-      status: json['status'] as String? ?? 'CONFIRMADO',
-      prioridade: json['prioridade'] as String?,
-      modalidade: json['modalidade'] as String?,
-      descricao: json['descricao'] as String? ?? json['observacoes'] as String?,
+      status: json['status']?.toString() ?? 'CONFIRMADO',
+      prioridade: json['prioridade']?.toString(),
+      modalidade: json['modalidade']?.toString(),
+      descricao: json['descricao']?.toString() ?? json['observacoes']?.toString(),
       cliente: json['cliente'] != null && json['cliente'] is Map<String, dynamic>
           ? ClienteResumoModel.fromJson(json['cliente'] as Map<String, dynamic>)
           : null,
@@ -68,11 +121,11 @@ class ServiceOrderModel {
               json['proxima_etapa'] is Map<String, dynamic>
           ? StepModel.fromJson(json['proxima_etapa'] as Map<String, dynamic>)
           : null,
-      etapasClosed: json['etapas_closed'] as int? ?? 0,
-      etapasTotal: json['etapas_total'] as int? ??
-          (json['etapas_count'] as int? ?? etapasList.length),
-      podeFinalizarOs: json['pode_finalizar_os'] as bool? ?? false,
-      etapasAbertas: json['etapas_abertas'] as int?,
+      etapasClosed: _toInt(json['etapas_closed']) ?? 0,
+      etapasTotal: _toInt(json['etapas_total']) ??
+          (_toInt(json['etapas_count']) ?? etapasList.length),
+      podeFinalizarOs: _toBool(json['pode_finalizar_os']),
+      etapasAbertas: _toInt(json['etapas_abertas']),
       etapas: etapasList,
     );
   }

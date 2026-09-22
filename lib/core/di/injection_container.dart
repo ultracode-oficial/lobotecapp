@@ -1,6 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import '../network/api_client.dart';
+import '../services/location_service.dart';
 import '../storage/secure_storage_service.dart';
 
 // Auth
@@ -44,6 +45,10 @@ Future<void> setupDependencies() async {
 
   getIt.registerLazySingleton<ApiClient>(
     () => ApiClient(storage: getIt<SecureStorageService>()),
+  );
+
+  getIt.registerLazySingleton<LocationService>(
+    () => LocationService(),
   );
 
   // --- Auth ---

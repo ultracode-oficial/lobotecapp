@@ -123,15 +123,57 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
     }
 
     return items
-        .whereType<Map<String, dynamic>>()
-        .map((e) => ServiceOrderModel.fromJson(e))
+        .whereType<Map>()
+        .map((e) => ServiceOrderModel.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
 
   @override
   Future<ServiceOrderModel> getServiceOrderDetail(int id) async {
     final response = await _client.get(ApiConstants.executarServicoDetail(id));
-    return ServiceOrderModel.fromJson(response.data as Map<String, dynamic>);
+    var rawData = response.data;
+    if (rawData is Map && rawData['data'] is Map) {
+      rawData = Map<String, dynamic>.from(rawData['data'] as Map);
+    } else if (rawData is Map) {
+      rawData = Map<String, dynamic>.from(rawData);
+    } else {
+      rawData = <String, dynamic>{};
+    }
+
+    var order = ServiceOrderModel.fromJson(rawData as Map<String, dynamic>);
+
+    // Sempre buscar as etapas da OS via endpoint dedicado de etapas do técnico
+    try {
+      final etapasResp = await _client.get(ApiConstants.executarServicoEtapas(id));
+      final etapasData = etapasResp.data;
+      List rawList = [];
+      if (etapasData is Map && etapasData['data'] is List) {
+        rawList = etapasData['data'] as List;
+      } else if (etapasData is List) {
+        rawList = etapasData;
+      }
+
+      final etapas = rawList
+          .whereType<Map>()
+          .map((e) => StepModel.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+
+      if (etapas.isNotEmpty) {
+        final closedCount = etapas.where((e) => e.isFinalized).length;
+        final allClosed = etapas.every((e) => e.isFinalized);
+        order = order.copyWith(
+          etapas: etapas,
+          etapasClosed: closedCount > 0 ? closedCount : order.etapasClosed,
+          etapasTotal: etapas.isNotEmpty ? etapas.length : order.etapasTotal,
+          podeFinalizarOs: allClosed || order.podeFinalizarOs,
+        );
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('⚠️ [Datasource] Erro ao buscar etapas adicionais da OS $id: $e');
+    }
+
+    return order;
   }
 
   @override
@@ -166,8 +208,8 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
     }
 
     return items
-        .whereType<Map<String, dynamic>>()
-        .map((e) => StepModel.fromJson(e))
+        .whereType<Map>()
+        .map((e) => StepModel.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
 
@@ -189,7 +231,45 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
   @override
   Future<StepModel> getStepDetail(int etapaId) async {
     final response = await _client.get(ApiConstants.executarEtapaDetail(etapaId));
-    return StepModel.fromJson(response.data as Map<String, dynamic>);
+    var rawData = response.data;
+    if (rawData is Map && rawData['data'] is Map) {
+      rawData = Map<String, dynamic>.from(rawData['data'] as Map);
+    } else if (rawData is Map) {
+      rawData = Map<String, dynamic>.from(rawData);
+    } else {
+      rawData = <String, dynamic>{};
+    }
+    var step = StepModel.fromJson(rawData as Map<String, dynamic>);
+
+    // Buscar lista de equipamentos da etapa pelo endpoint oficial
+    try {
+      final eqResponse = await _client.get(ApiConstants.executarEtapaEquipamentos(etapaId));
+      final eqData = eqResponse.data;
+      List eqList = [];
+      if (eqData is Map && eqData['data'] is List) {
+        eqList = eqData['data'] as List;
+      } else if (eqData is List) {
+        eqList = eqData;
+      }
+      final equipments = eqList
+          .whereType<Map>()
+          .map((e) => EquipmentModel.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+
+      if (equipments.isNotEmpty) {
+        final done = equipments.where((e) => e.isFinalizado).length;
+        step = step.copyWith(
+          equipamentos: equipments,
+          equipamentosTotal: equipments.length,
+          equipamentosDone: done,
+        );
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('⚠️ [Datasource] Erro ao carregar equipamentos da etapa $etapaId: $e');
+    }
+
+    return step;
   }
 
   @override
@@ -198,15 +278,12 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
     required double lat,
     required double lng,
   }) async {
-    final response = await _client.post(
+    await _client.post(
       ApiConstants.executarEtapaCheckIn(etapaId),
       data: {'lat': lat, 'lng': lng},
     );
-    final data = response.data;
-    if (data is Map<String, dynamic> && data['etapa'] != null) {
-      return StepModel.fromJson(data['etapa'] as Map<String, dynamic>);
-    }
-    return StepModel.fromJson(data as Map<String, dynamic>);
+    // Recarrega os dados completos da etapa com equipamentos após o check-in
+    return await getStepDetail(etapaId);
   }
 
   @override
@@ -250,8 +327,8 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       items = data;
     }
     return items
-        .whereType<Map<String, dynamic>>()
-        .map((e) => EquipmentModel.fromJson(e))
+        .whereType<Map>()
+        .map((e) => EquipmentModel.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
 
@@ -263,7 +340,15 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
     final response = await _client.get(
       ApiConstants.executarEquipamentoDetail(etapaId, equipamentoServicoId),
     );
-    return EquipmentModel.fromJson(response.data as Map<String, dynamic>);
+    var rawData = response.data;
+    if (rawData is Map && rawData['data'] is Map) {
+      rawData = Map<String, dynamic>.from(rawData['data'] as Map);
+    } else if (rawData is Map) {
+      rawData = Map<String, dynamic>.from(rawData);
+    } else {
+      rawData = <String, dynamic>{};
+    }
+    return EquipmentModel.fromJson(rawData as Map<String, dynamic>);
   }
 
   @override
@@ -283,7 +368,15 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       ApiConstants.executarEquipamentoRegistro(etapaId, equipamentoServicoId),
       data: data,
     );
-    return EquipmentModel.fromJson(response.data as Map<String, dynamic>);
+    var rawData = response.data;
+    if (rawData is Map && rawData['data'] is Map) {
+      rawData = Map<String, dynamic>.from(rawData['data'] as Map);
+    } else if (rawData is Map) {
+      rawData = Map<String, dynamic>.from(rawData);
+    } else {
+      rawData = <String, dynamic>{};
+    }
+    return EquipmentModel.fromJson(rawData as Map<String, dynamic>);
   }
 
   @override
@@ -296,7 +389,15 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       ApiConstants.executarEquipamentoChecklist(etapaId, equipamentoServicoId),
       data: data,
     );
-    return ChecklistModel.fromJson(response.data as Map<String, dynamic>);
+    var rawData = response.data;
+    if (rawData is Map && rawData['data'] is Map) {
+      rawData = Map<String, dynamic>.from(rawData['data'] as Map);
+    } else if (rawData is Map) {
+      rawData = Map<String, dynamic>.from(rawData);
+    } else {
+      rawData = <String, dynamic>{};
+    }
+    return ChecklistModel.fromJson(rawData as Map<String, dynamic>);
   }
 
   @override
@@ -337,6 +438,14 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       ApiConstants.executarTarefaToggle(tarefaId),
       data: status != null ? {'status': status} : null,
     );
-    return TaskModel.fromJson(response.data as Map<String, dynamic>);
+    var rawData = response.data;
+    if (rawData is Map && rawData['data'] is Map) {
+      rawData = Map<String, dynamic>.from(rawData['data'] as Map);
+    } else if (rawData is Map) {
+      rawData = Map<String, dynamic>.from(rawData);
+    } else {
+      rawData = <String, dynamic>{};
+    }
+    return TaskModel.fromJson(rawData as Map<String, dynamic>);
   }
 }

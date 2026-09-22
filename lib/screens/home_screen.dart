@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../core/colors.dart';
 import '../core/di/injection_container.dart';
+import '../core/services/location_service.dart';
 import '../core/state.dart';
 import '../features/auth/presentation/bloc/auth_bloc.dart';
 import '../features/auth/presentation/bloc/auth_state.dart';
@@ -25,6 +26,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    getIt<LocationService>().startTracking();
+  }
+
   final List<Widget> _pages = [
     const _HomeContent(),
     const AgendaScreen(),
@@ -342,10 +350,6 @@ class _HomeContentState extends State<_HomeContent>
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-
-                          // Card de Tempo Médio
-                          _buildAverageTimeCard(dashboard.tempoMedioMinutos),
                           const SizedBox(height: 24),
 
                           // Atalhos Rápidos de Campo
@@ -567,61 +571,6 @@ class _HomeContentState extends State<_HomeContent>
     );
   }
 
-  Widget _buildAverageTimeCard(int? tempoMedio) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.info.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.timer_outlined, color: AppColors.info, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Tempo Médio de Atendimento',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  tempoMedio != null
-                      ? 'Média de $tempoMedio minutos por etapa concluída'
-                      : 'Sem histórico de fechamento recente',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          if (tempoMedio != null)
-            Text(
-              '$tempoMedio min',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.info,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildQuickActionsRow(BuildContext context) {
     return Row(
       children: [
@@ -716,19 +665,23 @@ class _HomeContentState extends State<_HomeContent>
                   label: proximo.statusEtapa ?? 'AGUARDANDO',
                   color: isEmAndamento ? AppColors.primary : AppColors.warning,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Text(
-                    proximo.numeroOs ?? 'OS #${proximo.servicoId}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Text(
+                      proximo.numeroOs ?? 'OS #${proximo.servicoId}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),

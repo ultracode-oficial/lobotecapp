@@ -79,14 +79,16 @@ class _SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset('assets/images/logo.png', height: 80),
-            const SizedBox(height: 32),
-            const CircularProgressIndicator(),
-          ],
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset('assets/images/logo.png', height: 80),
+              const SizedBox(height: 32),
+              const CircularProgressIndicator(),
+            ],
+          ),
         ),
       ),
     );

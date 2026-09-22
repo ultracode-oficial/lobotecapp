@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'package:dio/dio.dart';
 import '../constants/api_constants.dart';
 import '../error/exceptions.dart';
@@ -25,6 +26,7 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: _onRequest,
+        onResponse: _onResponse,
         onError: _onError,
       ),
     );
@@ -38,13 +40,43 @@ class ApiClient {
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
     }
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('🚀 [API REQ] ${options.method} ${options.uri}');
+    if (options.queryParameters.isNotEmpty) {
+      print('🔍 [API QUERY]: ${options.queryParameters}');
+    }
+    if (options.data != null) {
+      print('📦 [API DATA]: ${options.data}');
+    }
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     handler.next(options);
+  }
+
+  void _onResponse(Response response, ResponseInterceptorHandler handler) {
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print(
+      '✅ [API RESP ${response.statusCode}] ${response.requestOptions.method} ${response.requestOptions.uri}',
+    );
+    print('📄 [API DATA]: ${response.data}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    handler.next(response);
   }
 
   Future<void> _onError(
     DioException error,
     ErrorInterceptorHandler handler,
   ) async {
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print(
+      '❌ [API ERR ${error.response?.statusCode}] ${error.requestOptions.method} ${error.requestOptions.uri}',
+    );
+    if (error.response?.data != null) {
+      print('⚠️ [API ERR BODY]: ${error.response?.data}');
+    } else {
+      print('⚠️ [API ERR MSG]: ${error.message}');
+    }
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     final statusCode = error.response?.statusCode;
 
     if (statusCode == 401 && !_isRefreshing) {
@@ -84,32 +116,17 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? queryParameters,
     Options? options,
-  }) =>
-      _request(() => _dio.get(
-            path,
-            queryParameters: queryParameters,
-            options: options,
-          ));
+  }) => _request(
+    () => _dio.get(path, queryParameters: queryParameters, options: options),
+  );
 
-  Future<Response> post(
-    String path, {
-    dynamic data,
-    Options? options,
-  }) =>
+  Future<Response> post(String path, {dynamic data, Options? options}) =>
       _request(() => _dio.post(path, data: data, options: options));
 
-  Future<Response> put(
-    String path, {
-    dynamic data,
-    Options? options,
-  }) =>
+  Future<Response> put(String path, {dynamic data, Options? options}) =>
       _request(() => _dio.put(path, data: data, options: options));
 
-  Future<Response> patch(
-    String path, {
-    dynamic data,
-    Options? options,
-  }) =>
+  Future<Response> patch(String path, {dynamic data, Options? options}) =>
       _request(() => _dio.patch(path, data: data, options: options));
 
   Future<Response> delete(String path, {dynamic data}) =>
@@ -126,7 +143,8 @@ class ApiClient {
   Exception _handleDioError(DioException e) {
     final statusCode = e.response?.statusCode;
     final data = e.response?.data;
-    final message = (data is Map ? data['message'] : null) as String? ??
+    final message =
+        (data is Map ? data['message'] : null) as String? ??
         'Erro de comunicação com o servidor.';
 
     if (e.type == DioExceptionType.connectionError ||
@@ -140,7 +158,9 @@ class ApiClient {
       case 403:
         return AuthException(message);
       case 422:
-        final errors = data is Map ? data['errors'] as Map<String, dynamic>? : null;
+        final errors = data is Map
+            ? data['errors'] as Map<String, dynamic>?
+            : null;
         return ValidationException(message, errors: errors);
       default:
         return ServerException(message, statusCode: statusCode);
