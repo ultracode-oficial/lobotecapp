@@ -11,8 +11,10 @@ import '../features/execution/presentation/bloc/dashboard/dashboard_event.dart';
 import '../features/execution/presentation/bloc/dashboard/dashboard_state.dart';
 import '../widgets/status_badge.dart';
 import 'agenda_screen.dart';
+import 'profile_screen.dart';
 import 'service_orders_screen.dart';
 import 'step_execution_screen.dart';
+import 'teams_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,8 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
     const _HomeContent(),
     const AgendaScreen(),
     const ServiceOrdersScreen(),
-    const Scaffold(body: Center(child: Text('Equipes (Em breve)'))),
-    const Scaffold(body: Center(child: Text('Perfil (Em breve)'))),
+    const TeamsScreen(),
+    const ProfileScreen(),
   ];
 
   @override
@@ -434,6 +436,22 @@ class CustomDrawer extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               AppState().setHomeIndex(2);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.group, color: AppColors.primary),
+            title: const Text('Equipes'),
+            onTap: () {
+              Navigator.pop(context);
+              AppState().setHomeIndex(3);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.person, color: AppColors.primary),
+            title: const Text('Meu Perfil'),
+            onTap: () {
+              Navigator.pop(context);
+              AppState().setHomeIndex(4);
             },
           ),
           const Divider(),
