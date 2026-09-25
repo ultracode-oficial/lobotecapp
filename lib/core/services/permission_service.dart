@@ -8,9 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 class PermissionService {
   static bool _requestedThisSession = false;
 
-  /// Solicita as permissões essenciais do aplicativo:
-  /// - Localização (para validação de check-in e rotas)
-  /// - Câmera (para fotos de checklist dos equipamentos)
+
   static Future<void> requestAppPermissions() async {
     if (_requestedThisSession) return;
     _requestedThisSession = true;
