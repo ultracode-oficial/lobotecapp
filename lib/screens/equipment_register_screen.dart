@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../core/colors.dart';
 import '../core/di/injection_container.dart';
@@ -114,12 +115,19 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final etapaId = widget.etapaId ?? 0;
+      final etapaId = widget.etapaId;
+      if (etapaId == null || etapaId <= 0) {
+        throw Exception('Etapa não identificada. Volte e abra o equipamento novamente.');
+      }
+      final tipoId = widget.equipment.tipoEquipamentoId;
+      if (tipoId == null) {
+        throw Exception('Tipo do equipamento não identificado pela API.');
+      }
       final data = {
         'tag': _tagController.text.trim(),
         'marca': _selectedBrand,
         'modelo': _selectedType,
-        'tipo_equipamento_id': 1,
+        'tipo_equipamento_id': tipoId,
         'btu': _btuController.text.trim(),
         'evaporadora': _evaporatorController.text.trim(),
         'condensadora': _condenserController.text.trim(),
@@ -127,14 +135,12 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
         'observacoes': _obsController.text.trim(),
       };
 
-      if (etapaId > 0) {
-        final dataSource = getIt<ExecutionRemoteDataSource>();
-        await dataSource.registerEquipment(
-          etapaId,
-          widget.equipment.id,
-          data,
-        );
-      }
+      final dataSource = getIt<ExecutionRemoteDataSource>();
+      await dataSource.registerEquipment(
+        etapaId,
+        widget.equipment.id,
+        data,
+      );
 
       if (mounted) {
         setState(() => _isSaving = false);
@@ -147,16 +153,33 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
+      debugPrint('Erro registro equipamento: $e');
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao salvar ficha do equipamento: $e'),
+            content: Text('Erro ao salvar ficha do equipamento: ${_errorMessage(e)}'),
             backgroundColor: AppColors.error,
           ),
         );
       }
     }
+  }
+
+  /// Extrai a mensagem de validação (422) retornada pela API.
+  String _errorMessage(Object e) {
+    if (e is DioException) {
+      final body = e.response?.data;
+      if (body is Map) {
+        final errors = body['errors'];
+        if (errors is Map && errors.isNotEmpty) {
+          final first = errors.values.first;
+          if (first is List && first.isNotEmpty) return first.first.toString();
+        }
+        if (body['message'] != null) return body['message'].toString();
+      }
+    }
+    return e.toString().replaceFirst('Exception: ', '');
   }
 
   @override

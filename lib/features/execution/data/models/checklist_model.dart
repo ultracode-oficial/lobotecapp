@@ -39,9 +39,26 @@ class ChecklistModel {
       tempoResolucao: json['tempo_resolucao']?.toString(),
       temperatura: json['temperatura']?.toString(),
       observacoes: json['observacoes'] as String?,
-      fotoAntesUrl: json['foto_antes_url'] as String? ?? json['foto_antes'] as String?,
-      fotoDepoisUrl: json['foto_depois_url'] as String? ?? json['foto_depois'] as String?,
+      fotoAntesUrl: _readPhoto(json, 'antes'),
+      fotoDepoisUrl: _readPhoto(json, 'depois'),
     );
+  }
+
+  /// Procura a foto em formatos possíveis: foto_antes_url, foto_antes,
+  /// foto_antes_path, fotos_antes (lista) e fotos: {antes: ...}.
+  static String? _readPhoto(Map<String, dynamic> json, String tipo) {
+    String? pick(dynamic v) {
+      if (v is String && v.isNotEmpty) return v;
+      if (v is List && v.isNotEmpty) return pick(v.first);
+      if (v is Map) return pick(v['url'] ?? v['path']);
+      return null;
+    }
+
+    return pick(json['foto_${tipo}_url']) ??
+        pick(json['foto_$tipo']) ??
+        pick(json['foto_${tipo}_path']) ??
+        pick(json['fotos_$tipo']) ??
+        (json['fotos'] is Map ? pick((json['fotos'] as Map)[tipo]) : null);
   }
 
   Map<String, dynamic> toJson() {

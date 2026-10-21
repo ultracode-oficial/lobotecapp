@@ -693,7 +693,7 @@ class _ServiceDetailViewState extends State<_ServiceDetailView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Validação de Check-in • ${activeEtapa.titulo ?? "Etapa #${activeEtapa.id}"}',
+                        'Validação de Check-in • ${activeEtapa.label}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
@@ -717,7 +717,7 @@ class _ServiceDetailViewState extends State<_ServiceDetailView> {
             ),
             const SizedBox(height: 12),
             Text(
-              'O check-in libera o início das tarefas e a execução dos aparelhos da ${activeEtapa.titulo ?? "Etapa #${activeEtapa.id}"}.',
+              'O check-in libera o início das tarefas e a execução dos aparelhos da ${activeEtapa.label}.',
               style: TextStyle(fontSize: 13, color: Colors.grey.shade700, height: 1.3),
             ),
             const SizedBox(height: 16),
@@ -735,7 +735,7 @@ class _ServiceDetailViewState extends State<_ServiceDetailView> {
                 ),
                 icon: const Icon(Icons.map_rounded, size: 20),
                 label: Text(
-                  'ABRIR MAPA & CHECK-IN (${(activeEtapa.titulo ?? "ETAPA #${activeEtapa.id}").toUpperCase()})',
+                  'ABRIR MAPA & CHECK-IN (${activeEtapa.label.toUpperCase()})',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 onPressed: () => _openMapCheckIn(context, activeEtapa),
@@ -940,7 +940,7 @@ class _ServiceDetailViewState extends State<_ServiceDetailView> {
                 children: [
                   Expanded(
                     child: Text(
-                      etapa.titulo ?? 'Etapa ${etapa.id}',
+                      etapa.label,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,

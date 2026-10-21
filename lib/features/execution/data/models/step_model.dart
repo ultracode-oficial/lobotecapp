@@ -26,6 +26,8 @@ class StepModel {
   final int id;
   final int? servicoId;
   final String? titulo;
+  final int? sequencia;
+  final String? observacoes;
   final String status;
   final String? dataInicio;
   final String? dataFim;
@@ -46,6 +48,8 @@ class StepModel {
     required this.id,
     this.servicoId,
     this.titulo,
+    this.sequencia,
+    this.observacoes,
     required this.status,
     this.dataInicio,
     this.dataFim,
@@ -63,6 +67,9 @@ class StepModel {
     this.temAssinatura = false,
   });
 
+  /// Rótulo de exibição: usa a sequência da etapa (não o ID).
+  String get label => sequencia != null ? 'Etapa $sequencia' : (titulo ?? 'Etapa');
+
   bool get isCheckedIn =>
       status == 'EM_ANDAMENTO' ||
       status == 'FINALIZADO' ||
@@ -74,6 +81,8 @@ class StepModel {
     int? id,
     int? servicoId,
     String? titulo,
+    int? sequencia,
+    String? observacoes,
     String? status,
     String? dataInicio,
     String? dataFim,
@@ -94,6 +103,8 @@ class StepModel {
       id: id ?? this.id,
       servicoId: servicoId ?? this.servicoId,
       titulo: titulo ?? this.titulo,
+      sequencia: sequencia ?? this.sequencia,
+      observacoes: observacoes ?? this.observacoes,
       status: status ?? this.status,
       dataInicio: dataInicio ?? this.dataInicio,
       dataFim: dataFim ?? this.dataFim,
@@ -161,10 +172,9 @@ class StepModel {
       id: _toInt(json['id']) ?? 0,
       servicoId: _toInt(json['servico_id']) ??
           (json['servico'] is Map ? _toInt(json['servico']['id']) : null),
-      titulo: json['titulo']?.toString() ??
-          (json['numero_etapa'] != null
-              ? 'Etapa ${json['numero_etapa']}'
-              : 'Etapa ${json['id']}'),
+      titulo: json['titulo']?.toString(),
+      sequencia: _toInt(json['sequencia']) ?? _toInt(json['numero_etapa']),
+      observacoes: json['observacoes']?.toString(),
       status: json['status']?.toString() ?? 'AGUARDANDO',
       dataInicio: json['data_inicio']?.toString() ??
           json['data_hora_inicial']?.toString() ??

@@ -825,7 +825,7 @@ class _AgendaCalendarViewState extends State<_AgendaCalendarView> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        step.titulo ?? 'Etapa ${step.id}',
+                        step.label,
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

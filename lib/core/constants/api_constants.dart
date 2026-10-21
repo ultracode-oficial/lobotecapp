@@ -67,4 +67,31 @@ class ApiConstants {
       '/executar/tarefas/$tarefaId/formulario';
   static String executarFormularioAnexo(dynamic respostaId) =>
       '/executar/formulario-respostas/$respostaId/anexos';
+
+  /// Converte um caminho retornado pela API na URL pública completa
+  static String resolveStorageUrl(String path) {
+    if (path.isEmpty) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+
+    // Normaliza múltiplas barras consecutivas
+    var clean = path.replaceAll(RegExp(r'/+'), '/');
+
+    // Remove duplicações de prefixo causadas por concatenações repetidas no backend
+    while (clean.contains('/filestorages_lobotec/filestorages_lobotec')) {
+      clean = clean.replaceFirst('/filestorages_lobotec/filestorages_lobotec', '/filestorages_lobotec');
+    }
+    while (clean.contains('/storage/storage')) {
+      clean = clean.replaceFirst('/storage/storage', '/storage');
+    }
+
+    final origin = Uri.parse(baseUrl).origin;
+    final cleanPath = clean.startsWith('/') ? clean : '/$clean';
+
+    // Se a API já devolveu o path público (/filestorages_... ou /storage/...)
+    if (cleanPath.startsWith('/filestorage') || cleanPath.startsWith('/storage')) {
+      return '$origin$cleanPath';
+    }
+
+    return '$origin/storage$cleanPath';
+  }
 }

@@ -32,6 +32,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
+# path_provider_foundation >=2.5 depende de objective_c, cujo build hook falha
+# no Windows com espaço no caminho do usuário. 2.4.1 não usa esse hook (iOS/macOS only).
+dependency_overrides:
+  path_provider_foundation: 2.4.1
+
 flutter:
   uses-material-design: true
 

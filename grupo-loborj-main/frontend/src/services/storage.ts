@@ -1,1 +1,0 @@
-export const STORAGE_PATH = import.meta.env.VITE_STORAGE_URL

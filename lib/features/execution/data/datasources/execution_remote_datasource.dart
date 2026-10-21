@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../../../../core/error/exceptions.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/api_client.dart';
 import '../models/checklist_model.dart';
@@ -83,6 +84,23 @@ abstract class ExecutionRemoteDataSource {
   });
 
   Future<TaskModel> toggleTask(int tarefaId, {String? status});
+
+  /// GET /executar/tarefas/{id}/formulario. Retorna o JSON cru (campo `data`).
+  Future<Map<String, dynamic>> getTaskForm(int tarefaId);
+
+  /// POST /executar/tarefas/{id}/formulario.
+  Future<Map<String, dynamic>> submitTaskForm(
+    int tarefaId, {
+    required int formularioVersaoId,
+    required String status,
+    required List<Map<String, dynamic>> respostas,
+  });
+
+  /// POST /executar/formulario-respostas/{id}/anexos.
+  Future<Map<String, dynamic>> uploadFormAttachment(
+    int respostaId,
+    String filePath,
+  );
 }
 
 class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
@@ -122,9 +140,11 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       items = data;
     }
 
+    const hidden = {'EM_ANALISE', 'RECUSADO', 'CANCELADO'};
     return items
         .whereType<Map>()
         .map((e) => ServiceOrderModel.fromJson(Map<String, dynamic>.from(e)))
+        .where((o) => !hidden.contains(o.status.toUpperCase()))
         .toList();
   }
 
@@ -144,7 +164,9 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
 
     // Sempre buscar as etapas da OS via endpoint dedicado de etapas do técnico
     try {
-      final etapasResp = await _client.get(ApiConstants.executarServicoEtapas(id));
+      final etapasResp = await _client.get(
+        ApiConstants.executarServicoEtapas(id),
+      );
       final etapasData = etapasResp.data;
       List rawList = [];
       if (etapasData is Map && etapasData['data'] is List) {
@@ -178,7 +200,9 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
 
   @override
   Future<Map<String, dynamic>> finalizeServiceOrder(int id) async {
-    final response = await _client.post(ApiConstants.executarServicoFinalizar(id));
+    final response = await _client.post(
+      ApiConstants.executarServicoFinalizar(id),
+    );
     return response.data as Map<String, dynamic>;
   }
 
@@ -220,17 +244,16 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
   }) async {
     final response = await _client.get(
       ApiConstants.executarAgendaOcupacao,
-      queryParameters: {
-        'data_inicio': dataInicio,
-        'data_fim': dataFim,
-      },
+      queryParameters: {'data_inicio': dataInicio, 'data_fim': dataFim},
     );
     return response.data as Map<String, dynamic>;
   }
 
   @override
   Future<StepModel> getStepDetail(int etapaId) async {
-    final response = await _client.get(ApiConstants.executarEtapaDetail(etapaId));
+    final response = await _client.get(
+      ApiConstants.executarEtapaDetail(etapaId),
+    );
     var rawData = response.data;
     if (rawData is Map && rawData['data'] is Map) {
       rawData = Map<String, dynamic>.from(rawData['data'] as Map);
@@ -243,7 +266,9 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
 
     // Buscar lista de equipamentos da etapa pelo endpoint oficial
     try {
-      final eqResponse = await _client.get(ApiConstants.executarEtapaEquipamentos(etapaId));
+      final eqResponse = await _client.get(
+        ApiConstants.executarEtapaEquipamentos(etapaId),
+      );
       final eqData = eqResponse.data;
       List eqList = [];
       if (eqData is Map && eqData['data'] is List) {
@@ -266,7 +291,9 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       }
     } catch (e) {
       // ignore: avoid_print
-      print('⚠️ [Datasource] Erro ao carregar equipamentos da etapa $etapaId: $e');
+      print(
+        '⚠️ [Datasource] Erro ao carregar equipamentos da etapa $etapaId: $e',
+      );
     }
 
     return step;
@@ -297,8 +324,11 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       data: formData,
     );
 
-    final data = response.data as Map<String, dynamic>;
-    return (data['assinatura_url'] ?? data['url'] ?? '') as String;
+    var data = response.data as Map<String, dynamic>;
+    if (data['data'] is Map) {
+      data = Map<String, dynamic>.from(data['data'] as Map);
+    }
+    return (data['assinatura_url'] ?? data['url'] ?? '').toString();
   }
 
   @override
@@ -317,8 +347,9 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
 
   @override
   Future<List<EquipmentModel>> getEquipments(int etapaId) async {
-    final response =
-        await _client.get(ApiConstants.executarEtapaEquipamentos(etapaId));
+    final response = await _client.get(
+      ApiConstants.executarEtapaEquipamentos(etapaId),
+    );
     final data = response.data;
     List items = [];
     if (data is Map && data['data'] is List) {
@@ -413,7 +444,10 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
     });
 
     final response = await _client.post(
-      ApiConstants.executarEquipamentoChecklistFoto(etapaId, equipamentoServicoId),
+      ApiConstants.executarEquipamentoChecklistFoto(
+        etapaId,
+        equipamentoServicoId,
+      ),
       data: formData,
     );
     return response.data as Map<String, dynamic>;
@@ -425,11 +459,21 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
     int equipamentoServicoId, {
     bool confirmPendencias = false,
   }) async {
-    final response = await _client.post(
-      ApiConstants.executarEquipamentoFinalizar(etapaId, equipamentoServicoId),
-      data: confirmPendencias ? {'confirm_pendencias': true} : null,
-    );
-    return response.data as Map<String, dynamic>;
+    try {
+      final response = await _client.post(
+        ApiConstants.executarEquipamentoFinalizar(
+          etapaId,
+          equipamentoServicoId,
+        ),
+        data: confirmPendencias ? {'confirm_pendencias': true} : null,
+      );
+      return response.data as Map<String, dynamic>;
+    } on ValidationException catch (e) {
+      if (e.errors != null && e.errors!['code'] == 'CONFIRMATION_REQUIRED') {
+        return e.errors!;
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -447,5 +491,52 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       rawData = <String, dynamic>{};
     }
     return TaskModel.fromJson(rawData as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getTaskForm(int tarefaId) async {
+    final response = await _client.get(
+      ApiConstants.executarTarefaFormulario(tarefaId),
+    );
+    final raw = response.data;
+    if (raw is Map && raw['data'] is Map) {
+      return Map<String, dynamic>.from(raw['data'] as Map);
+    }
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> submitTaskForm(
+    int tarefaId, {
+    required int formularioVersaoId,
+    required String status,
+    required List<Map<String, dynamic>> respostas,
+  }) async {
+    final response = await _client.post(
+      ApiConstants.executarTarefaFormulario(tarefaId),
+      data: {
+        'formulario_versao_id': formularioVersaoId,
+        'status': status,
+        'respostas': respostas,
+      },
+    );
+    final raw = response.data;
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> uploadFormAttachment(
+    int respostaId,
+    String filePath,
+  ) async {
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(filePath),
+    });
+    final response = await _client.post(
+      ApiConstants.executarFormularioAnexo(respostaId),
+      data: formData,
+    );
+    final raw = response.data;
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
   }
 }

@@ -430,7 +430,7 @@ class _TeamsView extends StatelessWidget {
           stepsWithColleagues = state.steps.where((s) => s.colegas.isNotEmpty).toList();
           for (var step in stepsWithColleagues) {
             for (var col in step.colegas) {
-              final osInfo = '${step.numeroOs ?? 'OS'} • ${step.titulo ?? 'Etapa'}';
+              final osInfo = '${step.numeroOs ?? 'OS'} • ${step.label}';
               if (!colleagueServices.containsKey(col)) {
                 colleagueServices[col] = [];
               }

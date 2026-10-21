@@ -1,5 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../core/colors.dart';
+import '../core/constants/api_constants.dart';
 import '../core/di/injection_container.dart';
 import '../features/execution/data/datasources/execution_remote_datasource.dart';
 import '../features/execution/data/models/equipment_model.dart';
@@ -7,7 +9,9 @@ import '../features/execution/data/models/task_model.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/status_badge.dart';
 import 'equipment_checklist_screen.dart';
+import 'equipment_checklist_wizard_screen.dart';
 import 'equipment_register_screen.dart';
+import 'task_form_screen.dart';
 
 class EquipmentDetailScreen extends StatefulWidget {
   final int etapaId;
@@ -66,28 +70,134 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
   Future<void> _handleStartEquipment() async {
     try {
       await _dataSource.startEquipment(widget.etapaId, widget.equipmentId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Equipamento iniciado com sucesso!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      _loadEquipment();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao iniciar: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      debugPrint('Aviso ao iniciar equipamento: $e');
     }
+
+    // Abre imediatamente o checklist interativo de vistoria inicial (Perguntas e Respostas)
+    if (!mounted) return;
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EquipmentChecklistWizardScreen(
+          etapaId: widget.etapaId,
+          equipmentId: widget.equipmentId,
+          checklist: _equipment?.checklist,
+          mode: ChecklistWizardMode.inicial,
+        ),
+      ),
+    );
+    _loadEquipment();
+  }
+
+  /// Antes de finalizar o equipamento, checa se as tarefas possuem formulário ativo.
+  /// Se a API retornar 404 (sem formulário vinculado), ignora e segue normalmente.
+  /// Se a API retornar 200 com perguntas, abre para o técnico preencher.
+  Future<bool> _checkAndFillPendingForms() async {
+    final tarefas = _equipment?.tarefas ?? [];
+    for (final t in tarefas) {
+      if (t.formularioStatus == 'ENVIADO') continue;
+
+      try {
+        final formData = await _dataSource.getTaskForm(t.id);
+        final rawQuestions = formData['perguntas'];
+        final hasQuestions = rawQuestions is List && rawQuestions.isNotEmpty;
+
+        if (hasQuestions) {
+          if (!mounted) return false;
+          final formDone = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TaskFormScreen(tarefaId: t.id, tarefaNome: t.nome),
+            ),
+          );
+          if (formDone != true) {
+            // Técnico cancelou o formulário, interrompe finalização
+            return false;
+          }
+          await _loadEquipment();
+        }
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          // 404: Sem formulário vinculado/publicado. Segue em frente normalmente!
+          debugPrint('Tarefa ${t.id} sem formulário (404), seguindo normalmente.');
+        } else {
+          debugPrint('Aviso ao consultar formulário da tarefa ${t.id}: $e');
+        }
+      } catch (e) {
+        debugPrint('Aviso ao consultar formulário da tarefa ${t.id}: $e');
+      }
+    }
+    return true;
   }
 
   Future<void> _handleToggleTask(TaskModel task) async {
+    // Validação obrigatória: É necessário preencher a vistoria inicial antes de executar tarefas
+    final hasFotoAntes = _equipment?.checklist?.fotoAntesUrl != null &&
+        _equipment!.checklist!.fotoAntesUrl!.isNotEmpty;
+    final isChecklistPreenchido = _equipment?.checklist?.isPreenchido == true;
+
+    if (!hasFotoAntes || !isChecklistPreenchido) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Realize a vistoria inicial (Foto do Antes) antes de executar tarefas.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EquipmentChecklistWizardScreen(
+            etapaId: widget.etapaId,
+            equipmentId: widget.equipmentId,
+            checklist: _equipment?.checklist,
+            mode: ChecklistWizardMode.inicial,
+          ),
+        ),
+      );
+      _loadEquipment();
+      return;
+    }
+
+    final newStatus = task.isFeito ? 'PENDENTE' : 'FEITO';
+
+    // Se estiver marcando a tarefa como FEITO, checa se esta é a última tarefa pendente do aparelho!
+    if (newStatus == 'FEITO') {
+      final tarefas = _equipment?.tarefas ?? [];
+      final outrasPendentes = tarefas.where((t) => !t.isFeito && t.id != task.id).length;
+      final isUltimaTarefa = outrasPendentes == 0;
+
+      if (isUltimaTarefa) {
+        // Ao concluir a última tarefa, o equipamento será finalizado.
+        // Garante que o checklist final (Foto do Depois / Temperatura) seja feito antes!
+        final checklist = _equipment?.checklist;
+        final hasFotoDepois = checklist?.fotoDepoisUrl != null && checklist!.fotoDepoisUrl!.isNotEmpty;
+
+        if (!hasFotoDepois) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Última tarefa! Registre a foto de conclusão (Depois) para finalizar.'),
+              backgroundColor: AppColors.primary,
+            ),
+          );
+          final completed = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EquipmentChecklistWizardScreen(
+                etapaId: widget.etapaId,
+                equipmentId: widget.equipmentId,
+                checklist: checklist,
+                mode: ChecklistWizardMode.finalizacao,
+              ),
+            ),
+          );
+          if (completed != true) return;
+          await _loadEquipment();
+        }
+      }
+    }
+
     try {
-      final newStatus = task.isFeito ? 'PENDENTE' : 'FEITO';
       await _dataSource.toggleTask(task.id, status: newStatus);
       _loadEquipment();
     } catch (e) {
@@ -102,6 +212,54 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
   }
 
   Future<void> _handleFinalizeEquipment({bool confirmPendencias = false}) async {
+    final checklist = _equipment?.checklist;
+    final isChecklistPreenchido = checklist?.isPreenchido == true;
+    final hasFotoDepois = checklist?.fotoDepoisUrl != null && checklist!.fotoDepoisUrl!.isNotEmpty;
+
+    // Se ainda não tirou a foto do depois, abre a tela de finalização antes de enviar
+    if (!hasFotoDepois) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tire a foto do serviço concluído (Foto do Depois) para finalizar.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      final completed = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EquipmentChecklistWizardScreen(
+            etapaId: widget.etapaId,
+            equipmentId: widget.equipmentId,
+            checklist: checklist,
+            mode: ChecklistWizardMode.finalizacao,
+          ),
+        ),
+      );
+      if (completed != true) return;
+      await _loadEquipment();
+    }
+
+    if (!mounted) return;
+
+    // É obrigatório preencher o Checklist Técnico antes de finalizar o equipamento
+    if (!isChecklistPreenchido) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'É necessário preencher o Checklist Técnico antes de finalizar o equipamento.',
+          ),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    // Checa se alguma tarefa possui formulário ativo antes de finalizar.
+    // Se der 404, ignora e segue normalmente. Se tiver formulário com perguntas, abre para preencher.
+    final formsOk = await _checkAndFillPendingForms();
+    if (!formsOk) return;
+    if (!mounted) return;
+
     try {
       final res = await _dataSource.finalizeEquipment(
         widget.etapaId,
@@ -111,12 +269,54 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
 
       if (res['code'] == 'CONFIRMATION_REQUIRED') {
         if (!mounted) return;
+        final pendenciasData = res['data'] is Map ? res['data'] as Map : {};
+        final tarefasPendentes = pendenciasData['tarefas_pendentes'] ?? 0;
+        final checklistPendente = pendenciasData['checklist_pendente'] == true;
+        final formsPendentes = pendenciasData['formularios_pendentes'] ?? 0;
+
+        // Se NÃO há tarefas pendentes nem checklist pendente (o backend só está acusando
+        // formulário pendente de um tipo que nem tem formulário publicado),
+        // confirma e finaliza automaticamente sem travar o técnico com popup!
+        if (tarefasPendentes == 0 && !checklistPendente && formsPendentes > 0) {
+          _handleFinalizeEquipment(confirmPendencias: true);
+          return;
+        }
+
+        final pendenciasList = <String>[];
+        if (checklistPendente) pendenciasList.add('• Checklist técnico pendente');
+        if (tarefasPendentes > 0) pendenciasList.add('• $tarefasPendentes tarefa(s) pendente(s)');
+        if (formsPendentes > 0) pendenciasList.add('• $formsPendentes formulário(s) pendente(s)');
+
         showDialog(
           context: context,
           builder: (dialogCtx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: const Text('Pendências no Equipamento'),
-            content: Text(
-              '${res['message']}\n\nDeseja confirmar a finalização mesmo com pendências?',
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  res['message']?.toString() ??
+                      'Existem pendências neste equipamento. Confirme para finalizar mesmo assim.',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                if (pendenciasList.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  ...pendenciasList.map((p) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          p,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.error),
+                        ),
+                      )),
+                ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Deseja confirmar a finalização mesmo com pendências?',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ],
             ),
             actions: [
               TextButton(
@@ -124,6 +324,10 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
                 child: const Text('Cancelar'),
               ),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: () {
                   Navigator.pop(dialogCtx);
                   _handleFinalizeEquipment(confirmPendencias: true);
@@ -289,7 +493,10 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => EquipmentRegisterScreen(equipment: eq),
+                        builder: (_) => EquipmentRegisterScreen(
+                          equipment: eq,
+                          etapaId: widget.etapaId,
+                        ),
                       ),
                     ).then((_) => _loadEquipment());
                   },
@@ -333,6 +540,10 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
   Widget _buildChecklistCard(EquipmentModel eq) {
     final checklist = eq.checklist;
     final isPreenchido = checklist?.isPreenchido == true;
+    final fotoAntes = checklist?.fotoAntesUrl;
+    final fotoDepois = checklist?.fotoDepoisUrl;
+    final hasFotoAntes = fotoAntes != null && fotoAntes.isNotEmpty;
+    final hasFotoDepois = fotoDepois != null && fotoDepois.isNotEmpty;
 
     return Card(
       elevation: 0,
@@ -349,7 +560,7 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'CHECKLIST TÉCNICO',
+                  'CHECKLIST & VISTORIAS',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -363,40 +574,151 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
               ],
             ),
             const SizedBox(height: 12),
+            _buildInfoRow(
+              'Foto do Antes:',
+              hasFotoAntes ? 'Registrada' : 'Pendente (Obrigatória no Início)',
+            ),
+            _buildInfoRow(
+              'Foto do Depois:',
+              hasFotoDepois ? 'Registrada' : 'Pendente (Obrigatória no Final)',
+            ),
+            if (hasFotoAntes || hasFotoDepois) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (hasFotoAntes) ...[
+                    _buildPhotoThumbnail('Foto Antes', fotoAntes),
+                    const SizedBox(width: 12),
+                  ],
+                  if (hasFotoDepois) ...[
+                    _buildPhotoThumbnail('Foto Depois', fotoDepois),
+                  ],
+                ],
+              ),
+            ],
             if (checklist != null && isPreenchido) ...[
+              const SizedBox(height: 8),
               _buildInfoRow('Condição:', checklist.statusEquipamento ?? 'OK'),
               if (checklist.hasProblema) ...[
                 _buildInfoRow('Problema:', checklist.problema ?? '-'),
                 _buildInfoRow('Solução:', checklist.solucao ?? '-'),
               ],
               if (checklist.temperatura != null)
-                _buildInfoRow('Temperatura:', '${checklist.temperatura}°C'),
-            ] else ...[
-              const Text(
-                'O checklist inicial e testes ainda não foram enviados.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
+                _buildInfoRow('Temperatura Final:', '${checklist.temperatura}°C'),
             ],
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: eq.isFinalizado
-                    ? null
-                    : () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => EquipmentChecklistScreen(
-                              etapaId: widget.etapaId,
-                              equipmentId: widget.equipmentId,
-                              checklist: checklist,
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: Icon(hasFotoAntes ? Icons.check_circle : Icons.camera_alt, size: 16),
+                    label: Text(hasFotoAntes ? 'Vistoria Inicial OK' : 'Fazer Vistoria'),
+                    onPressed: eq.isFinalizado
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EquipmentChecklistWizardScreen(
+                                  etapaId: widget.etapaId,
+                                  equipmentId: widget.equipmentId,
+                                  checklist: checklist,
+                                  mode: ChecklistWizardMode.inicial,
+                                ),
+                              ),
+                            ).then((_) => _loadEquipment());
+                          },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Visualizar / Editar Completo',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary),
+                  onPressed: eq.isFinalizado
+                      ? null
+                      : () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EquipmentChecklistScreen(
+                                etapaId: widget.etapaId,
+                                equipmentId: widget.equipmentId,
+                                checklist: checklist,
+                              ),
                             ),
-                          ),
-                        ).then((_) => _loadEquipment());
-                      },
-                child: Text(isPreenchido ? 'Editar Checklist' : 'Preencher Checklist'),
+                          ).then((_) => _loadEquipment());
+                        },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoThumbnail(String label, String photoPath) {
+    final resolvedUrl = ApiConstants.resolveStorageUrl(photoPath);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => _showImageDialog(resolvedUrl),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 72,
+              height: 72,
+              color: Colors.grey.shade200,
+              child: Image.network(
+                resolvedUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, error, stack) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.grey,
+                  size: 28,
+                ),
               ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showImageDialog(String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                color: Colors.black87,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+                ),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, error, stack) => Container(
+                    padding: const EdgeInsets.all(32),
+                    color: Colors.white,
+                    child: const Text('Não foi possível carregar a imagem.'),
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(ctx),
             ),
           ],
         ),
@@ -445,22 +767,41 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ] else ...[
-              ...tasks.map((t) => CheckboxListTile(
-                    title: Text(
-                      t.nome,
-                      style: TextStyle(
-                        fontSize: 14,
-                        decoration: t.isFeito ? TextDecoration.lineThrough : null,
-                        color: t.isFeito ? AppColors.textSecondary : AppColors.textPrimary,
-                      ),
-                    ),
-                    value: t.isFeito,
-                    activeColor: AppColors.success,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: eq.isFinalizado ? null : (_) => _handleToggleTask(t),
-                  )),
+              ...tasks.map((t) => _buildTaskItem(eq, t)),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskItem(EquipmentModel eq, TaskModel t) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: eq.isFinalizado ? null : () => _handleToggleTask(t),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Checkbox(
+                value: t.isFeito,
+                activeColor: AppColors.success,
+                onChanged: eq.isFinalizado ? null : (_) => _handleToggleTask(t),
+              ),
+              Expanded(
+                child: Text(
+                  t.nome,
+                  style: TextStyle(
+                    fontSize: 14,
+                    decoration: t.isFeito ? TextDecoration.lineThrough : null,
+                    color: t.isFeito ? AppColors.textSecondary : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

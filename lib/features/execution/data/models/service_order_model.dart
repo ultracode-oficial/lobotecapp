@@ -106,7 +106,8 @@ class ServiceOrderModel {
 
     return ServiceOrderModel(
       id: _toInt(json['id']) ?? 0,
-      numeroOs: json['numero_os']?.toString() ??
+      numeroOs: json['codigo']?.toString() ??
+          json['numero_os']?.toString() ??
           json['identificador']?.toString() ??
           '#${json['id']}',
       status: json['status']?.toString() ?? 'CONFIRMADO',
@@ -125,7 +126,9 @@ class ServiceOrderModel {
       etapasTotal: _toInt(json['etapas_total']) ??
           (_toInt(json['etapas_count']) ?? etapasList.length),
       podeFinalizarOs: _toBool(json['pode_finalizar_os']),
-      etapasAbertas: _toInt(json['etapas_abertas']),
+      etapasAbertas: json['etapas_abertas'] is List
+          ? (json['etapas_abertas'] as List).length
+          : _toInt(json['etapas_abertas']),
       etapas: etapasList,
     );
   }

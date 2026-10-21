@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/colors.dart';
+import '../core/constants/api_constants.dart';
 import '../core/di/injection_container.dart';
 import '../features/execution/data/datasources/execution_remote_datasource.dart';
 import '../features/execution/data/models/checklist_model.dart';
@@ -107,19 +108,24 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
       setState(() => _isUploadingPhoto = true);
 
       final dataSource = getIt<ExecutionRemoteDataSource>();
-      await dataSource.uploadChecklistPhoto(
+      final res = await dataSource.uploadChecklistPhoto(
         widget.etapaId,
         widget.equipmentId,
         tipo: tipo,
         imagePath: picked.path,
       );
 
+      final returnedUrl = res['url']?.toString() ??
+          res['path']?.toString() ??
+          (res['data'] is Map ? (res['data']['url']?.toString() ?? res['data']['path']?.toString()) : null);
+
       if (mounted) {
         setState(() {
+          final photoRef = returnedUrl?.isNotEmpty == true ? returnedUrl! : picked.path;
           if (tipo == 'antes') {
-            _photoBeforePath = picked.path;
+            _photoBeforePath = photoRef;
           } else {
-            _photoAfterPath = picked.path;
+            _photoAfterPath = photoRef;
           }
           _isUploadingPhoto = false;
         });
@@ -369,6 +375,21 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
     );
   }
 
+  Widget _buildPhotoImage(String path) {
+    Widget broken() => const Center(
+          child: Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
+        );
+
+    // Foto escolhida agora (arquivo local)
+    if (!path.startsWith('http') && File(path).existsSync()) {
+      return Image.file(File(path), fit: BoxFit.cover, errorBuilder: (_, _, _) => broken());
+    }
+
+    // Foto já salva no servidor: URL absoluta ou caminho relativo do storage
+    final url = ApiConstants.resolveStorageUrl(path);
+    return Image.network(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => broken());
+  }
+
   Widget _buildPhotoBox({
     required String tipo,
     required String? path,
@@ -389,9 +410,7 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
           ),
         ),
         child: hasImage
-            ? (path.startsWith('http')
-                ? Image.network(path, fit: BoxFit.cover)
-                : Image.file(File(path), fit: BoxFit.cover))
+            ? _buildPhotoImage(path)
             : Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

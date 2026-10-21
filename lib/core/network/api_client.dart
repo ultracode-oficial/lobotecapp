@@ -52,12 +52,25 @@ class ApiClient {
     handler.next(options);
   }
 
+  void _printLong(String prefix, dynamic data) {
+    final text = '$prefix$data';
+    const chunkSize = 800;
+    if (text.length <= chunkSize) {
+      print(text);
+      return;
+    }
+    for (int i = 0; i < text.length; i += chunkSize) {
+      final end = (i + chunkSize < text.length) ? i + chunkSize : text.length;
+      print(text.substring(i, end));
+    }
+  }
+
   void _onResponse(Response response, ResponseInterceptorHandler handler) {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print(
       '✅ [API RESP ${response.statusCode}] ${response.requestOptions.method} ${response.requestOptions.uri}',
     );
-    print('📄 [API DATA]: ${response.data}');
+    _printLong('📄 [API DATA]: ', response.data);
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     handler.next(response);
   }
@@ -158,9 +171,14 @@ class ApiClient {
       case 403:
         return AuthException(message);
       case 422:
-        final errors = data is Map
-            ? data['errors'] as Map<String, dynamic>?
-            : null;
+        Map<String, dynamic>? errors;
+        if (data is Map) {
+          if (data['errors'] is Map) {
+            errors = Map<String, dynamic>.from(data['errors'] as Map);
+          } else {
+            errors = Map<String, dynamic>.from(data);
+          }
+        }
         return ValidationException(message, errors: errors);
       default:
         return ServerException(message, statusCode: statusCode);

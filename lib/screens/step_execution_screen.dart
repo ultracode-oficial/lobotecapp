@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../core/colors.dart';
+import '../core/constants/api_constants.dart';
 import '../core/di/injection_container.dart';
 import '../core/utils/date_formatter.dart';
 import '../features/execution/data/models/equipment_model.dart';
@@ -88,30 +89,19 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
             context: context,
             builder: (dialogCtx) => AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Confirmar Finalização'),
-              content: Text(
-                '${state.message}\n\nExistem equipamentos não iniciados. Deseja desvinculá-los e finalizar a etapa mesmo assim?',
+              title: const Text('Equipamentos em aberto'),
+              content: const Text(
+                'Esta etapa possui equipamentos em aberto. Caso queira finalizar '
+                'essa etapa com equipamentos em aberto, contate a administração.',
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogCtx),
-                  child: const Text('Cancelar'),
-                ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: () {
-                    Navigator.pop(dialogCtx);
-                    context.read<StepExecutionBloc>().add(
-                          FinalizeStepEvent(
-                            widget.etapaId,
-                            confirmRemocaoNaoIniciados: true,
-                          ),
-                        );
-                  },
-                  child: const Text('Confirmar e Finalizar'),
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Entendi'),
                 ),
               ],
             ),
@@ -165,7 +155,7 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
           return Scaffold(
             appBar: AppBar(
               title: Text(
-                step.titulo ?? 'Etapa #${step.id}',
+                step.label,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               leading: const BackButton(),
@@ -193,6 +183,36 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
                   // 1. BANNER HERO COM DADOS DA OS E DO CLIENTE
                   _buildHeroHeaderCard(context, step),
                   const SizedBox(height: 16),
+
+                  // OBSERVAÇÃO GERAL DA ETAPA
+                  if (step.observacoes != null && step.observacoes!.trim().isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Observação Geral',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(step.observacoes!, style: const TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // ASSINATURA DO CLIENTE (persistida pela API)
+                  if (step.assinaturaUrl != null && step.assinaturaUrl!.isNotEmpty) ...[
+                    _buildSignaturePreview(step.assinaturaUrl!),
+                    const SizedBox(height: 16),
+                  ],
 
                   // 2. AVISO SE CHECK-IN NÃO FOI FEITO NA TELA ANTERIOR
                   if (!isCheckedIn && !isFinalized) ...[
@@ -742,6 +762,50 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSignaturePreview(String assinaturaUrl) {
+    final url = ApiConstants.resolveStorageUrl(assinaturaUrl);
+    debugPrint('📸 [ASSINATURA BRUTA DA API]: "$assinaturaUrl"');
+    debugPrint('📸 [ASSINATURA URL PARA O IMAGE.NETWORK]: "$url"');
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.verified, size: 16, color: AppColors.success),
+              SizedBox(width: 6),
+              Text(
+                'Assinatura do cliente coletada',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 110,
+            width: double.infinity,
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Center(
+                child: Text(
+                  'Não foi possível carregar a imagem da assinatura.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

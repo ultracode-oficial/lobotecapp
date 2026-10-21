@@ -28,6 +28,7 @@ class EquipmentModel {
   final String? marca;
   final String? modelo;
   final String? tipoEquipamento;
+  final int? tipoEquipamentoId;
   final String? btu;
   final String? evaporadora;
   final String? condensadora;
@@ -48,6 +49,7 @@ class EquipmentModel {
     this.marca,
     this.modelo,
     this.tipoEquipamento,
+    this.tipoEquipamentoId,
     this.btu,
     this.evaporadora,
     this.condensadora,
@@ -80,6 +82,9 @@ class EquipmentModel {
     } else if (json['tipo_equipamento'] is String) {
       tipo = json['tipo_equipamento'] as String;
     }
+    final tipoId = _toInt(json['tipo_equipamento_id']) ??
+        (json['tipo_equipamento'] is Map ? _toInt(json['tipo_equipamento']['id']) : null) ??
+        (json['equipamento'] is Map ? _toInt(json['equipamento']['tipo_equipamento_id']) : null);
 
 
     return EquipmentModel(
@@ -87,13 +92,14 @@ class EquipmentModel {
       equipamentoId: _toInt(json['equipamento_id']),
       tag: json['tag']?.toString(),
       isGeneric: _toBool(json['is_generic'], defaultValue: false),
-      registroPendente: _toBool(json['registro_pendente'], defaultValue: false),
-      checklistPendente: _toBool(json['checklist_pendente'], defaultValue: true),
-      cadastrado: _toBool(json['cadastrado'], defaultValue: false),
+      registroPendente: _toBool(json['badges'] is Map ? json['badges']['registro_pendente'] : json['registro_pendente'], defaultValue: false),
+      checklistPendente: _toBool(json['badges'] is Map ? json['badges']['checklist_pendente'] : json['checklist_pendente'], defaultValue: true),
+      cadastrado: _toBool(json['badges'] is Map ? json['badges']['cadastrado'] : json['cadastrado'], defaultValue: false),
       status: json['status']?.toString() ?? 'AGUARDANDO',
       marca: json['marca']?.toString(),
       modelo: json['modelo']?.toString(),
       tipoEquipamento: tipo,
+      tipoEquipamentoId: tipoId,
       btu: json['btu']?.toString(),
       evaporadora: json['evaporadora']?.toString(),
       condensadora: json['condensadora']?.toString(),
