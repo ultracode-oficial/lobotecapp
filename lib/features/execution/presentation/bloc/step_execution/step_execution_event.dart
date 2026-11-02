@@ -78,11 +78,18 @@ class UploadChecklistPhotoEvent extends StepExecutionEvent {
 class UploadSignatureEvent extends StepExecutionEvent {
   final int etapaId;
   final String imagePath;
+  final String assinaturaNome;
+  final String assinaturaCpf;
 
-  const UploadSignatureEvent(this.etapaId, this.imagePath);
+  const UploadSignatureEvent(
+    this.etapaId,
+    this.imagePath, {
+    required this.assinaturaNome,
+    required this.assinaturaCpf,
+  });
 
   @override
-  List<Object?> get props => [etapaId, imagePath];
+  List<Object?> get props => [etapaId, imagePath, assinaturaNome, assinaturaCpf];
 }
 
 class FinalizeStepEvent extends StepExecutionEvent {

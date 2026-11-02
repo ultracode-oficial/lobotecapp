@@ -21,10 +21,12 @@ import '../../features/execution/data/datasources/execution_remote_datasource.da
 import '../../features/execution/data/repositories/execution_repository_impl.dart';
 import '../../features/execution/domain/repositories/execution_repository.dart';
 import '../../features/execution/domain/usecases/agenda_usecases.dart';
+import '../../features/execution/domain/usecases/history_usecase.dart';
 import '../../features/execution/domain/usecases/dashboard_usecase.dart';
 import '../../features/execution/domain/usecases/service_orders_usecases.dart';
 import '../../features/execution/domain/usecases/step_execution_usecases.dart';
 import '../../features/execution/presentation/bloc/agenda/agenda_bloc.dart';
+import '../../features/execution/presentation/bloc/history/history_bloc.dart';
 import '../../features/execution/presentation/bloc/dashboard/dashboard_bloc.dart';
 import '../../features/execution/presentation/bloc/service_orders/service_orders_bloc.dart';
 import '../../features/execution/presentation/bloc/step_execution/step_execution_bloc.dart';
@@ -101,6 +103,7 @@ Future<void> setupDependencies() async {
   getIt.registerLazySingleton(() => FinalizeServiceOrderUseCase(getIt<ExecutionRepository>()));
   getIt.registerLazySingleton(() => GetAgendaUseCase(getIt<ExecutionRepository>()));
   getIt.registerLazySingleton(() => GetAgendaOcupacaoUseCase(getIt<ExecutionRepository>()));
+  getIt.registerLazySingleton(() => GetHistoricoUseCase(getIt<ExecutionRepository>()));
   getIt.registerLazySingleton(() => GetStepDetailUseCase(getIt<ExecutionRepository>()));
   getIt.registerLazySingleton(() => PerformCheckInUseCase(getIt<ExecutionRepository>()));
   getIt.registerLazySingleton(() => UploadSignatureUseCase(getIt<ExecutionRepository>()));
@@ -142,5 +145,9 @@ Future<void> setupDependencies() async {
 
   getIt.registerFactory<AgendaBloc>(
     () => AgendaBloc(getAgendaUseCase: getIt<GetAgendaUseCase>()),
+  );
+
+  getIt.registerFactory<HistoryBloc>(
+    () => HistoryBloc(getHistoricoUseCase: getIt<GetHistoricoUseCase>()),
   );
 }

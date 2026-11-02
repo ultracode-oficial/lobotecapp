@@ -34,6 +34,12 @@ abstract class ExecutionRemoteDataSource {
     required String dataFim,
   });
 
+  Future<List<StepModel>> getHistorico({
+    String? q,
+    String? data,
+    int perPage = 50,
+  });
+
   Future<StepModel> getStepDetail(int etapaId);
 
   Future<StepModel> performCheckIn(
@@ -42,7 +48,12 @@ abstract class ExecutionRemoteDataSource {
     required double lng,
   });
 
-  Future<String> uploadSignature(int etapaId, String imagePath);
+  Future<String> uploadSignature(
+    int etapaId,
+    String imagePath, {
+    required String assinaturaNome,
+    required String assinaturaCpf,
+  });
 
   Future<Map<String, dynamic>> finalizeStep(
     int etapaId, {
@@ -64,6 +75,9 @@ abstract class ExecutionRemoteDataSource {
     Map<String, dynamic> data,
   );
 
+  /// GET /marcas-options — catálogo de marcas para o dropdown de registro.
+  Future<List<String>> getMarcasOptions();
+
   Future<ChecklistModel> saveChecklist(
     int etapaId,
     int equipamentoServicoId,
@@ -76,6 +90,12 @@ abstract class ExecutionRemoteDataSource {
     required String tipo,
     required String imagePath,
   });
+
+  Future<void> deleteChecklistPhoto(
+    int etapaId,
+    int equipamentoServicoId,
+    int fotoId,
+  );
 
   Future<Map<String, dynamic>> finalizeEquipment(
     int etapaId,
@@ -250,6 +270,35 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
   }
 
   @override
+  Future<List<StepModel>> getHistorico({
+    String? q,
+    String? data,
+    int perPage = 50,
+  }) async {
+    final params = <String, dynamic>{'per_page': perPage};
+    if (q != null && q.trim().isNotEmpty) params['q'] = q.trim();
+    if (data != null && data.isNotEmpty) params['data'] = data;
+
+    final response = await _client.get(
+      ApiConstants.executarHistorico,
+      queryParameters: params,
+    );
+
+    final payload = response.data;
+    List items = [];
+    if (payload is Map && payload['data'] is List) {
+      items = payload['data'] as List;
+    } else if (payload is List) {
+      items = payload;
+    }
+
+    return items
+        .whereType<Map>()
+        .map((e) => StepModel.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  @override
   Future<StepModel> getStepDetail(int etapaId) async {
     final response = await _client.get(
       ApiConstants.executarEtapaDetail(etapaId),
@@ -314,9 +363,16 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
   }
 
   @override
-  Future<String> uploadSignature(int etapaId, String imagePath) async {
+  Future<String> uploadSignature(
+    int etapaId,
+    String imagePath, {
+    required String assinaturaNome,
+    required String assinaturaCpf,
+  }) async {
     final formData = FormData.fromMap({
       'assinatura': await MultipartFile.fromFile(imagePath),
+      'assinatura_nome': assinaturaNome,
+      'assinatura_cpf': assinaturaCpf.replaceAll(RegExp(r'\D'), ''),
     });
 
     final response = await _client.post(
@@ -411,6 +467,30 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
   }
 
   @override
+  Future<List<String>> getMarcasOptions() async {
+    final response = await _client.get(ApiConstants.marcasOptions);
+    final data = response.data;
+    final List items;
+    if (data is List) {
+      items = data;
+    } else if (data is Map && data['data'] is List) {
+      items = data['data'] as List;
+    } else {
+      items = const [];
+    }
+
+    return items
+        .map((item) {
+          if (item is Map) {
+            return item['name']?.toString() ?? '';
+          }
+          return item.toString();
+        })
+        .where((name) => name.isNotEmpty)
+        .toList();
+  }
+
+  @override
   Future<ChecklistModel> saveChecklist(
     int etapaId,
     int equipamentoServicoId,
@@ -450,7 +530,29 @@ class ExecutionRemoteDataSourceImpl implements ExecutionRemoteDataSource {
       ),
       data: formData,
     );
-    return response.data as Map<String, dynamic>;
+    final body = response.data;
+    if (body is Map && body['data'] is Map) {
+      return Map<String, dynamic>.from(body['data'] as Map);
+    }
+    if (body is Map) {
+      return Map<String, dynamic>.from(body);
+    }
+    return <String, dynamic>{};
+  }
+
+  @override
+  Future<void> deleteChecklistPhoto(
+    int etapaId,
+    int equipamentoServicoId,
+    int fotoId,
+  ) async {
+    await _client.delete(
+      ApiConstants.executarEquipamentoChecklistFotoDelete(
+        etapaId,
+        equipamentoServicoId,
+        fotoId,
+      ),
+    );
   }
 
   @override

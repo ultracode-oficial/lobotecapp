@@ -41,9 +41,33 @@ class _StepExecutionView extends StatefulWidget {
 
 class _StepExecutionViewState extends State<_StepExecutionView> {
   StepModel? _currentStep;
+  bool _uploadingSignature = false;
 
   Future<void> _collectSignature(BuildContext context, StepModel step) async {
-    final imagePath = await Navigator.push<String>(
+    final totalEquipments = (step.equipamentosTotal != null && step.equipamentosTotal! > 0)
+        ? step.equipamentosTotal!
+        : step.equipamentos.length;
+    final completedEquipments = step.equipamentosDone != null
+        ? step.equipamentosDone!
+        : step.equipamentos.where((e) => e.isFinalizado).length;
+    final openEquipments = totalEquipments - completedEquipments;
+
+    if (openEquipments > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            openEquipments == 1
+                ? 'Finalize o equipamento em aberto antes de coletar a assinatura.'
+                : 'Finalize os $openEquipments equipamentos em aberto antes de coletar a assinatura.',
+          ),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final result = await Navigator.push<SignatureCaptureResult>(
       context,
       MaterialPageRoute(
         builder: (_) => SignatureCaptureScreen(
@@ -53,9 +77,15 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
       ),
     );
 
-    if (imagePath != null && context.mounted) {
+    if (result != null && context.mounted) {
+      setState(() => _uploadingSignature = true);
       context.read<StepExecutionBloc>().add(
-            UploadSignatureEvent(widget.etapaId, imagePath),
+            UploadSignatureEvent(
+              widget.etapaId,
+              result.imagePath,
+              assinaturaNome: result.nome,
+              assinaturaCpf: result.cpf,
+            ),
           );
     }
   }
@@ -69,7 +99,10 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
         } else if (state is StepCheckInSuccess) {
           setState(() => _currentStep = state.step);
         } else if (state is StepSignatureUploaded) {
-          setState(() => _currentStep = state.step);
+          setState(() {
+            _currentStep = state.step;
+            _uploadingSignature = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Assinatura salva com sucesso!'),
@@ -107,6 +140,9 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
             ),
           );
         } else if (state is StepExecutionError) {
+          if (_uploadingSignature) {
+            setState(() => _uploadingSignature = false);
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(state.message),
@@ -210,7 +246,7 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
 
                   // ASSINATURA DO CLIENTE (persistida pela API)
                   if (step.assinaturaUrl != null && step.assinaturaUrl!.isNotEmpty) ...[
-                    _buildSignaturePreview(step.assinaturaUrl!),
+                    _buildSignaturePreview(step),
                     const SizedBox(height: 16),
                   ],
 
@@ -244,7 +280,12 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
               ),
             ),
             bottomNavigationBar: (isCheckedIn && !isFinalized)
-                ? _buildBottomBar(context, step, hasSignature)
+                ? _buildBottomBar(
+                    context,
+                    step,
+                    hasSignature,
+                    openEquipments: totalEquipments - completedEquipments,
+                  )
                 : null,
           );
         }
@@ -607,12 +648,7 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
     String subtext = 'Toque para iniciar execução';
     Color subtextColor = AppColors.textSecondary;
 
-    if (eq.isGeneric || eq.registroPendente) {
-      status = 'Registro pendente';
-      statusColor = AppColors.warning;
-      subtext = 'Necessita cadastrar TAG/ficha técnica';
-      subtextColor = AppColors.error;
-    } else if (eq.isFinalizado) {
+    if (eq.isFinalizado) {
       status = 'Finalizado';
       statusColor = AppColors.success;
       subtext = 'Equipamento concluído com sucesso';
@@ -623,6 +659,9 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
       final completed = eq.tarefas.where((t) => t.isFeito).length;
       subtext = '$completed/${eq.tarefas.length} tarefas realizadas';
       subtextColor = AppColors.primary;
+    } else if (eq.isGeneric || eq.registroPendente) {
+      subtext = 'TAG não cadastrada';
+      subtextColor = AppColors.textSecondary;
     }
 
     final brandModel = [
@@ -766,7 +805,8 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
     );
   }
 
-  Widget _buildSignaturePreview(String assinaturaUrl) {
+  Widget _buildSignaturePreview(StepModel step) {
+    final assinaturaUrl = step.assinaturaUrl!;
     final url = ApiConstants.resolveStorageUrl(assinaturaUrl);
     debugPrint('📸 [ASSINATURA BRUTA DA API]: "$assinaturaUrl"');
     debugPrint('📸 [ASSINATURA URL PARA O IMAGE.NETWORK]: "$url"');
@@ -790,6 +830,17 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
               ),
             ],
           ),
+          if (step.assinaturaNome?.isNotEmpty == true) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Assinado por ${step.assinaturaNome}'
+              '${step.assinaturaCpfFormatado != null ? ' • CPF ${step.assinaturaCpfFormatado}' : ''}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           SizedBox(
             height: 110,
@@ -810,7 +861,14 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
     );
   }
 
-  Widget _buildBottomBar(BuildContext context, StepModel step, bool hasSignature) {
+  Widget _buildBottomBar(
+    BuildContext context,
+    StepModel step,
+    bool hasSignature, {
+    required int openEquipments,
+  }) {
+    final canCollectSignature = openEquipments <= 0;
+
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.all(16.0),
@@ -828,30 +886,35 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
           mainAxisSize: MainAxisSize.min,
           children: [
             CustomButton(
-              text: hasSignature ? 'ASSINATURA COLETADA' : 'COLETAR ASSINATURA DO CLIENTE',
-              isPrimary: !hasSignature,
+              text: hasSignature
+                  ? 'ASSINATURA COLETADA'
+                  : 'COLETAR ASSINATURA DO CLIENTE',
+              isPrimary: _uploadingSignature || (!hasSignature && canCollectSignature),
+              isLoading: _uploadingSignature,
               onPressed: () => _collectSignature(context, step),
             ),
             const SizedBox(height: 10),
             CustomButton(
               text: 'FINALIZAR ATENDIMENTO',
-              isPrimary: hasSignature,
-              onPressed: () {
-                if (!hasSignature) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'É obrigatório coletar a assinatura do cliente antes de finalizar.',
-                      ),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
-                  return;
-                }
-                context.read<StepExecutionBloc>().add(
-                      FinalizeStepEvent(widget.etapaId),
-                    );
-              },
+              isPrimary: hasSignature && !_uploadingSignature,
+              onPressed: _uploadingSignature
+                  ? null
+                  : () {
+                      if (!hasSignature) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'É obrigatório coletar a assinatura do cliente antes de finalizar.',
+                            ),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                        return;
+                      }
+                      context.read<StepExecutionBloc>().add(
+                            FinalizeStepEvent(widget.etapaId),
+                          );
+                    },
             ),
           ],
         ),

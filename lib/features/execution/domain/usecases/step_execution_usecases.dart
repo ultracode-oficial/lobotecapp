@@ -27,8 +27,18 @@ class PerformCheckInUseCase {
 class UploadSignatureUseCase {
   final ExecutionRepository _repository;
   UploadSignatureUseCase(this._repository);
-  Future<Either<Failure, String>> call(int etapaId, String imagePath) =>
-      _repository.uploadSignature(etapaId, imagePath);
+  Future<Either<Failure, String>> call(
+    int etapaId,
+    String imagePath, {
+    required String assinaturaNome,
+    required String assinaturaCpf,
+  }) =>
+      _repository.uploadSignature(
+        etapaId,
+        imagePath,
+        assinaturaNome: assinaturaNome,
+        assinaturaCpf: assinaturaCpf,
+      );
 }
 
 class FinalizeStepUseCase {

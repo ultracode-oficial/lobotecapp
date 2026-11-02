@@ -132,7 +132,7 @@ Números do **dia de hoje** (etapas alocadas ao técnico que cruzam a data atual
 | `ordens_do_dia` | Quantas OS distintas têm etapa hoje |
 | `etapas_feitas` / `etapas_total` | Etapas de hoje já `FINALIZADO` vs total |
 | `tempo_medio_minutos` | Média check-in → fim da etapa (30 dias). Sem amostras: `null` |
-| `proximo_servico` | Próxima etapa `AGUARDANDO` ou `EM_ANDAMENTO`. Pode ser `null` |
+| `proximo_servico` | Próxima etapa aberta (`AGUARDANDO`/`EM_ANDAMENTO`) alocada ao técnico, ordenada por `data_hora_inicial` (inclui atrasadas). Pode ser `null` |
 
 `proximo_servico` já traz resumo da OS e do cliente (incluindo `lat`, `lng` e endereço).
 
@@ -186,6 +186,18 @@ Só funciona se **todas** as etapas estiverem `FINALIZADO` ou `CANCELADO`. Se ai
 | `data_inicio` | sim | `Y-m-d` |
 | `data_fim` | sim | `Y-m-d`, intervalo máximo **62 dias** |
 | `status` | não | Status de **etapa**, separados por vírgula |
+
+### Histórico (etapas finalizadas)
+`GET /api/executar/historico`
+
+Lista paginada das etapas `FINALIZADO` em que o técnico está alocado.
+`per_page` opcional (1–100, default 20). Shape igual ao resumo da agenda.
+
+| Parâmetro | Obrigatório | Observação |
+|-----------|-------------|------------|
+| `q` | não | Cliente (razão/fantasia) ou código da OS |
+| `data` | não | Dia `Y-m-d` (`COALESCE(data_hora_final, data_hora_inicial)`) |
+| `per_page` | não | 1–100, default 20 |
 
 ### Ocupação (calendário)
 `GET /api/executar/agenda/ocupacao`
@@ -250,7 +262,15 @@ Re-check-in em etapa aberta é **permitido** (idempotente, atualiza horário).
 `POST /api/executar/etapas/{etapa}/assinatura`
 
 Multipart. Campo `assinatura`: imagem jpeg/png/jpg/webp, máx. **5 MB**.
-**Obrigatória** antes de finalizar. Resposta **201** com `assinatura_url`.
+Campos obrigatórios junto: `assinatura_nome` (nome de quem assina) e
+`assinatura_cpf` (CPF de quem assina; máscara aceita, gravado só com 11 dígitos).
+No app, nome/CPF são digitados antes da captura da assinatura.
+**Bloqueio:** se houver equipamentos da etapa com status diferente de
+`FINALIZADO`, a API responde **422** com `code: EQUIPAMENTOS_EM_ABERTO`
+(`data.equipamentos_abertos` / `data.equipamentos_total`).
+**Obrigatória** antes de finalizar. Resposta **201** com `assinatura_url`,
+`assinatura_nome` e `assinatura_cpf`. Etapa (resumo/detalhe) também expõe
+`assinatura_nome` e `assinatura_cpf`.
 
 ### Finalizar atendimento (fecha a etapa)
 `POST /api/executar/etapas/{etapa}/finalizar`
@@ -297,13 +317,18 @@ No detalhe, cada tarefa traz `tem_formulario` e `formulario_status`.
 
 Status vira `EM_ANDAMENTO`. Se já iniciado: **idempotente**. Se `FINALIZADO`: recusa.
 
+### Marcas (catálogo admin)
+`GET /api/marcas-options` — autenticado (qualquer usuário logado).
+
+Retorna lista `[{ id, name }, …]` ordenada por nome. Usar no dropdown de marca do registro de equipamento. Admin gerencia em Configurações → Marcas (`/api/marcas`).
+
 ### Registrar / editar ficha
 `PUT …/equipamentos/{equipamentoServico}/registro`
 
 Transforma genérico em cadastrado (`is_generic = false`) ou atualiza dados.
 
 Obrigatórios: `tipo_equipamento_id`, `tag`.
-Opcionais: `marca`, `modelo`, `btu`, `evaporadora`, `condensadora`, `localizacao`, `observacoes`.
+Opcionais: `marca` (string = `name` do catálogo), `modelo`, `btu`, `evaporadora`, `condensadora`, `localizacao`, `observacoes`.
 
 ### Checklist
 `PUT …/equipamentos/{equipamentoServico}/checklist`
@@ -314,14 +339,20 @@ Opcionais: `marca`, `modelo`, `btu`, `evaporadora`, `condensadora`, `localizacao
 | Necessita de Corretiva | `PROBLEMA_IDENTIFICADO` |
 
 `status_equipamento` é obrigatório. Se `PROBLEMA_IDENTIFICADO`, `problema` também é.
-Opcionais: `solucao`, `material`, `tempo_resolucao`, `temperatura`, `observacoes`, fotos.
+Opcionais: `solucao`, `material`, `tempo_resolucao`, `temperatura`, `observacoes`.
+Fotos **não** vão neste PUT — só via endpoints de foto.
 Marca `status_checklist = PREENCHIDO`.
 
-### Foto do checklist
+No detalhe do equipamento, `checklist` traz `fotos_antes` / `fotos_depois` (até **10** cada: `{ id, path, url, sort_order }`). Compat: `foto_antes` / `foto_depois` / `foto_*_url` = primeira foto.
+
+### Foto do checklist (append)
 `POST …/equipamentos/{equipamentoServico}/checklist/foto`
 
 Multipart: `tipo` = `antes` ou `depois`, arquivo `foto` (imagem, máx. 5 MB).
-Resposta traz `path` e `url`.
+**Acumula** (não substitui). Limite 10 por tipo (422 se exceder). Resposta: `{ id, tipo, path, url, sort_order, campo }`.
+
+### Remover foto do checklist
+`DELETE …/equipamentos/{equipamentoServico}/checklist/fotos/{foto}`
 
 ### Finalizar equipamento
 `POST …/equipamentos/{equipamentoServico}/finalizar`
@@ -389,6 +420,7 @@ Recurso de outro técnico → **403** (não 404).
 | `code` | Onde | O que o app faz |
 |--------|------|-----------------|
 | `ASSINATURA_OBRIGATORIA` | Finalizar atendimento | Ir para tela de assinatura |
+| `EQUIPAMENTOS_EM_ABERTO` | Upload assinatura | Finalizar todos os equipamentos da etapa primeiro |
 | `CONFIRMATION_REQUIRED` | Finalizar equipamento ou finalizar atendimento com equipamentos não iniciados | Mostrar aviso e repetir com flag de confirmação |
 | `ETAPAS_ABERTAS` | Finalizar OS | Sem confirmação — precisa fechar as etapas |
 
@@ -459,6 +491,7 @@ Raio máximo de check-in: **100 metros** em relação ao cliente.
 | `GET` | `/api/executar/servicos/{servico}/etapas` | Etapas da OS |
 | `POST` | `/api/executar/servicos/{servico}/finalizar` | Finalizar OS |
 | `GET` | `/api/executar/agenda` | Agenda |
+| `GET` | `/api/executar/historico` | Histórico (etapas FINALIZADO) |
 | `GET` | `/api/executar/agenda/ocupacao` | Contagem por dia |
 | `GET` | `/api/executar/etapas/{etapa}` | Detalhe da etapa |
 | `POST` | `/api/executar/etapas/{etapa}/check-in` | Check-in |
@@ -467,9 +500,11 @@ Raio máximo de check-in: **100 metros** em relação ao cliente.
 | `GET` | `/api/executar/etapas/{etapa}/equipamentos` | Lista de equipamentos |
 | `GET` | `/api/executar/etapas/{etapa}/equipamentos/{equipamentoServico}` | Detalhe do equipamento |
 | `POST` | `…/equipamentos/{equipamentoServico}/iniciar` | Iniciar |
+| `GET` | `/api/marcas-options` | Catálogo de marcas (dropdown) |
 | `PUT` | `…/equipamentos/{equipamentoServico}/registro` | Tag / ficha |
 | `PUT` | `…/equipamentos/{equipamentoServico}/checklist` | Checklist |
-| `POST` | `…/equipamentos/{equipamentoServico}/checklist/foto` | Foto antes/depois |
+| `POST` | `…/equipamentos/{equipamentoServico}/checklist/foto` | Append foto antes/depois |
+| `DELETE` | `…/checklist/fotos/{foto}` | Remover foto do checklist |
 | `POST` | `…/equipamentos/{equipamentoServico}/finalizar` | Finalizar equipamento |
 | `PATCH` | `/api/executar/tarefas/{tarefa}/toggle-status` | Marcar tarefa |
 | `GET` | `/api/executar/tarefas/{tarefa}/formulario` | Schema do formulário |

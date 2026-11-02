@@ -35,6 +35,8 @@ class StepModel {
   final double? checkInLat;
   final double? checkInLng;
   final String? assinaturaUrl;
+  final String? assinaturaNome;
+  final String? assinaturaCpf;
   final String? numeroOs;
   final String? tipoServicoNome;
   final ClienteResumoModel? cliente;
@@ -57,6 +59,8 @@ class StepModel {
     this.checkInLat,
     this.checkInLng,
     this.assinaturaUrl,
+    this.assinaturaNome,
+    this.assinaturaCpf,
     this.numeroOs,
     this.tipoServicoNome,
     this.cliente,
@@ -77,6 +81,12 @@ class StepModel {
 
   bool get isFinalized => status == 'FINALIZADO';
 
+  String? get assinaturaCpfFormatado {
+    final digits = assinaturaCpf?.replaceAll(RegExp(r'\D'), '');
+    if (digits == null || digits.length != 11) return assinaturaCpf;
+    return '${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9)}';
+  }
+
   StepModel copyWith({
     int? id,
     int? servicoId,
@@ -90,6 +100,8 @@ class StepModel {
     double? checkInLat,
     double? checkInLng,
     String? assinaturaUrl,
+    String? assinaturaNome,
+    String? assinaturaCpf,
     String? numeroOs,
     String? tipoServicoNome,
     ClienteResumoModel? cliente,
@@ -112,6 +124,8 @@ class StepModel {
       checkInLat: checkInLat ?? this.checkInLat,
       checkInLng: checkInLng ?? this.checkInLng,
       assinaturaUrl: assinaturaUrl ?? this.assinaturaUrl,
+      assinaturaNome: assinaturaNome ?? this.assinaturaNome,
+      assinaturaCpf: assinaturaCpf ?? this.assinaturaCpf,
       numeroOs: numeroOs ?? this.numeroOs,
       tipoServicoNome: tipoServicoNome ?? this.tipoServicoNome,
       cliente: cliente ?? this.cliente,
@@ -185,6 +199,8 @@ class StepModel {
       checkInLat: _toDouble(json['check_in_lat']) ?? _toDouble(json['checkin_lat']),
       checkInLng: _toDouble(json['check_in_lng']) ?? _toDouble(json['checkin_lng']),
       assinaturaUrl: json['assinatura_url']?.toString(),
+      assinaturaNome: json['assinatura_nome']?.toString(),
+      assinaturaCpf: json['assinatura_cpf']?.toString(),
       numeroOs: json['numero_os']?.toString() ??
           (json['servico'] is Map ? json['servico']['codigo']?.toString() : null) ??
           json['identificador']?.toString(),

@@ -30,8 +30,8 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
 
-  String? _photoBeforePath;
-  String? _photoAfterPath;
+  List<ChecklistPhoto> _fotosAntes = [];
+  List<ChecklistPhoto> _fotosDepois = [];
   bool _isUploadingPhoto = false;
   bool _isSaving = false;
 
@@ -57,8 +57,8 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
       _solutionController.text = cl.solucao ?? '';
       _materialController.text = cl.material ?? '';
       _estimatedTimeController.text = cl.tempoResolucao ?? '';
-      _photoBeforePath = cl.fotoAntesUrl;
-      _photoAfterPath = cl.fotoDepoisUrl;
+      _fotosAntes = List<ChecklistPhoto>.from(cl.fotosAntes);
+      _fotosDepois = List<ChecklistPhoto>.from(cl.fotosDepois);
     }
   }
 
@@ -73,7 +73,22 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
     super.dispose();
   }
 
+  List<ChecklistPhoto> _fotosOf(String tipo) =>
+      tipo == 'antes' ? _fotosAntes : _fotosDepois;
+
   Future<void> _pickAndUploadPhoto(String tipo) async {
+    if (_fotosOf(tipo).length >= ChecklistModel.maxFotosPorTipo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Limite de ${ChecklistModel.maxFotosPorTipo} fotos atingido.',
+          ),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
     try {
       final XFile? picked = await showModalBottomSheet<XFile?>(
         context: context,
@@ -117,15 +132,24 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
 
       final returnedUrl = res['url']?.toString() ??
           res['path']?.toString() ??
-          (res['data'] is Map ? (res['data']['url']?.toString() ?? res['data']['path']?.toString()) : null);
+          picked.path;
 
       if (mounted) {
         setState(() {
-          final photoRef = returnedUrl?.isNotEmpty == true ? returnedUrl! : picked.path;
+          final photo = ChecklistPhoto(
+            id: res['id'] is int
+                ? res['id'] as int
+                : int.tryParse(res['id']?.toString() ?? ''),
+            url: returnedUrl,
+            path: res['path']?.toString(),
+            sortOrder: res['sort_order'] is int
+                ? res['sort_order'] as int
+                : _fotosOf(tipo).length,
+          );
           if (tipo == 'antes') {
-            _photoBeforePath = photoRef;
+            _fotosAntes = [..._fotosAntes, photo];
           } else {
-            _photoAfterPath = photoRef;
+            _fotosDepois = [..._fotosDepois, photo];
           }
           _isUploadingPhoto = false;
         });
@@ -147,6 +171,46 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _deletePhoto(String tipo, ChecklistPhoto photo) async {
+    if (photo.id == null) {
+      setState(() {
+        if (tipo == 'antes') {
+          _fotosAntes = _fotosAntes.where((p) => p != photo).toList();
+        } else {
+          _fotosDepois = _fotosDepois.where((p) => p != photo).toList();
+        }
+      });
+      return;
+    }
+
+    setState(() => _isUploadingPhoto = true);
+    try {
+      await getIt<ExecutionRemoteDataSource>().deleteChecklistPhoto(
+        widget.etapaId,
+        widget.equipmentId,
+        photo.id!,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (tipo == 'antes') {
+          _fotosAntes = _fotosAntes.where((p) => p.id != photo.id).toList();
+        } else {
+          _fotosDepois = _fotosDepois.where((p) => p.id != photo.id).toList();
+        }
+        _isUploadingPhoto = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao remover foto: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -235,35 +299,16 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Fotos Antes
-                const Text(
-                  'Fotos Antes',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _buildPhotoBox(
+                _buildPhotoGallerySection(
+                  label: 'Fotos Antes',
                   tipo: 'antes',
-                  path: _photoBeforePath,
-                  onTap: () => _pickAndUploadPhoto('antes'),
+                  fotos: _fotosAntes,
                 ),
                 const SizedBox(height: 16),
-
-                // Fotos Depois
-                const Text(
-                  'Fotos Depois',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _buildPhotoBox(
+                _buildPhotoGallerySection(
+                  label: 'Fotos Depois',
                   tipo: 'depois',
-                  path: _photoAfterPath,
-                  onTap: () => _pickAndUploadPhoto('depois'),
+                  fotos: _fotosDepois,
                 ),
                 const SizedBox(height: 24),
 
@@ -380,56 +425,87 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
           child: Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
         );
 
-    // Foto escolhida agora (arquivo local)
     if (!path.startsWith('http') && File(path).existsSync()) {
       return Image.file(File(path), fit: BoxFit.cover, errorBuilder: (_, _, _) => broken());
     }
 
-    // Foto já salva no servidor: URL absoluta ou caminho relativo do storage
     final url = ApiConstants.resolveStorageUrl(path);
     return Image.network(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => broken());
   }
 
-  Widget _buildPhotoBox({
+  Widget _buildPhotoGallerySection({
+    required String label,
     required String tipo,
-    required String? path,
-    required VoidCallback onTap,
+    required List<ChecklistPhoto> fotos,
   }) {
-    final hasImage = path != null && path.isNotEmpty;
+    final canAdd = fotos.length < ChecklistModel.maxFotosPorTipo;
 
-    return GestureDetector(
-      onTap: _isUploadingPhoto ? null : onTap,
-      child: Container(
-        height: 120,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: hasImage ? AppColors.success : AppColors.border,
-            width: hasImage ? 2 : 1,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$label (${fotos.length}/${ChecklistModel.maxFotosPorTipo})',
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
           ),
         ),
-        child: hasImage
-            ? _buildPhotoImage(path)
-            : Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+        const SizedBox(height: 8),
+        if (fotos.isNotEmpty)
+          SizedBox(
+            height: 96,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: fotos.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, index) {
+                final photo = fotos[index];
+                return Stack(
                   children: [
-                    Icon(Icons.camera_alt_outlined,
-                        size: 32, color: AppColors.primary),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Tirar foto $tipo',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(
+                        width: 96,
+                        height: 96,
+                        child: _buildPhotoImage(photo.url),
+                      ),
+                    ),
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: Material(
+                        color: Colors.black87,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _isUploadingPhoto
+                              ? null
+                              : () => _deletePhoto(tipo, photo),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.close, size: 14, color: Colors.white),
+                          ),
+                        ),
                       ),
                     ),
                   ],
-                ),
-              ),
-      ),
+                );
+              },
+            ),
+          ),
+        if (fotos.isNotEmpty) const SizedBox(height: 8),
+        if (_isUploadingPhoto)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (canAdd)
+          OutlinedButton.icon(
+            onPressed: () => _pickAndUploadPhoto(tipo),
+            icon: const Icon(Icons.add_a_photo, size: 18),
+            label: Text(fotos.isEmpty ? 'Adicionar foto' : 'Adicionar outra'),
+          ),
+      ],
     );
   }
 }

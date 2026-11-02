@@ -44,8 +44,8 @@ class _EquipmentChecklistWizardScreenState
 
   // Campos do checklist
   String _statusEquipamento = 'OK'; // 'OK' ou 'PROBLEMA_IDENTIFICADO'
-  String? _fotoAntesUrl;
-  String? _fotoDepoisUrl;
+  List<ChecklistPhoto> _fotosAntes = [];
+  List<ChecklistPhoto> _fotosDepois = [];
   final _tempController = TextEditingController();
   final _problemController = TextEditingController();
   final _solutionController = TextEditingController();
@@ -58,8 +58,8 @@ class _EquipmentChecklistWizardScreenState
     final cl = widget.checklist;
     if (cl != null) {
       _statusEquipamento = cl.statusEquipamento ?? 'OK';
-      _fotoAntesUrl = cl.fotoAntesUrl;
-      _fotoDepoisUrl = cl.fotoDepoisUrl;
+      _fotosAntes = List<ChecklistPhoto>.from(cl.fotosAntes);
+      _fotosDepois = List<ChecklistPhoto>.from(cl.fotosDepois);
       _tempController.text = cl.temperatura ?? '';
       _problemController.text = cl.problema ?? '';
       _solutionController.text = cl.solucao ?? '';
@@ -91,7 +91,22 @@ class _EquipmentChecklistWizardScreenState
     }
   }
 
+  List<ChecklistPhoto> _fotosOf(String tipo) =>
+      tipo == 'antes' ? _fotosAntes : _fotosDepois;
+
   Future<void> _pickPhoto(String tipo) async {
+    if (_fotosOf(tipo).length >= ChecklistModel.maxFotosPorTipo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Limite de ${ChecklistModel.maxFotosPorTipo} fotos atingido.',
+          ),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -137,17 +152,24 @@ class _EquipmentChecklistWizardScreenState
 
       final url = res['url']?.toString() ??
           res['path']?.toString() ??
-          (res['data'] is Map
-              ? (res['data']['url']?.toString() ?? res['data']['path']?.toString())
-              : null);
+          picked.path;
 
       if (!mounted) return;
       setState(() {
-        final finalRef = (url != null && url.isNotEmpty) ? url : picked.path;
+        final photo = ChecklistPhoto(
+          id: res['id'] is int
+              ? res['id'] as int
+              : int.tryParse(res['id']?.toString() ?? ''),
+          url: url,
+          path: res['path']?.toString(),
+          sortOrder: res['sort_order'] is int
+              ? res['sort_order'] as int
+              : _fotosOf(tipo).length,
+        );
         if (tipo == 'antes') {
-          _fotoAntesUrl = finalRef;
+          _fotosAntes = [..._fotosAntes, photo];
         } else {
-          _fotoDepoisUrl = finalRef;
+          _fotosDepois = [..._fotosDepois, photo];
         }
         _isUploadingPhoto = false;
       });
@@ -164,6 +186,46 @@ class _EquipmentChecklistWizardScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Erro ao enviar foto: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deletePhoto(String tipo, ChecklistPhoto photo) async {
+    if (photo.id == null) {
+      setState(() {
+        if (tipo == 'antes') {
+          _fotosAntes = _fotosAntes.where((p) => p != photo).toList();
+        } else {
+          _fotosDepois = _fotosDepois.where((p) => p != photo).toList();
+        }
+      });
+      return;
+    }
+
+    setState(() => _isUploadingPhoto = true);
+    try {
+      await _ds.deleteChecklistPhoto(
+        widget.etapaId,
+        widget.equipmentId,
+        photo.id!,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (tipo == 'antes') {
+          _fotosAntes = _fotosAntes.where((p) => p.id != photo.id).toList();
+        } else {
+          _fotosDepois = _fotosDepois.where((p) => p.id != photo.id).toList();
+        }
+        _isUploadingPhoto = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao remover foto: $e'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -195,7 +257,7 @@ class _EquipmentChecklistWizardScreenState
   Future<void> _save() async {
     // Validações antes de salvar
     if (_isInicial) {
-      if (_fotoAntesUrl == null || _fotoAntesUrl!.isEmpty) {
+      if (_fotosAntes.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('A foto do equipamento (Antes) é obrigatória para iniciar.'),
@@ -217,7 +279,7 @@ class _EquipmentChecklistWizardScreenState
         return;
       }
     } else {
-      if (_fotoDepoisUrl == null || _fotoDepoisUrl!.isEmpty) {
+      if (_fotosDepois.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('A foto do serviço finalizado (Depois) é obrigatória.'),
@@ -238,18 +300,6 @@ class _EquipmentChecklistWizardScreenState
         'temperatura': _tempController.text.trim(),
         'observacoes': _obsController.text.trim(),
       };
-
-      String sanitizePhotoPath(String p) {
-        var s = p.replaceAll(RegExp(r'/+'), '/');
-        s = s.replaceFirst('/filestorages_lobotec/', '');
-        s = s.replaceFirst('filestorages_lobotec/', '');
-        s = s.replaceFirst('/storage/', '');
-        s = s.replaceFirst('storage/', '');
-        return s;
-      }
-
-      if (_fotoAntesUrl != null) payload['foto_antes'] = sanitizePhotoPath(_fotoAntesUrl!);
-      if (_fotoDepoisUrl != null) payload['foto_depois'] = sanitizePhotoPath(_fotoDepoisUrl!);
 
       if (_statusEquipamento == 'PROBLEMA_IDENTIFICADO') {
         payload['problema'] = _problemController.text.trim();
@@ -373,9 +423,10 @@ class _EquipmentChecklistWizardScreenState
       _buildCardCondicao(),
       _buildCardFoto(
         tipo: 'antes',
-        fotoUrl: _fotoAntesUrl,
-        titulo: 'Tire a Foto do Aparelho (Antes)',
-        subtitulo: 'Registre como o equipamento foi encontrado antes do serviço.',
+        fotos: _fotosAntes,
+        titulo: 'Fotos do Aparelho (Antes)',
+        subtitulo:
+            'Registre como o equipamento foi encontrado. Até ${ChecklistModel.maxFotosPorTipo} fotos.',
       ),
     ];
 
@@ -390,9 +441,10 @@ class _EquipmentChecklistWizardScreenState
     return [
       _buildCardFoto(
         tipo: 'depois',
-        fotoUrl: _fotoDepoisUrl,
-        titulo: 'Foto do Serviço Concluído (Depois)',
-        subtitulo: 'Tire uma foto nítida do equipamento pronto e finalizado.',
+        fotos: _fotosDepois,
+        titulo: 'Fotos do Serviço Concluído (Depois)',
+        subtitulo:
+            'Registre o equipamento pronto. Até ${ChecklistModel.maxFotosPorTipo} fotos.',
       ),
       _buildCardTemperaturaEObservacoes(),
     ];
@@ -521,11 +573,11 @@ class _EquipmentChecklistWizardScreenState
 
   Widget _buildCardFoto({
     required String tipo,
-    required String? fotoUrl,
+    required List<ChecklistPhoto> fotos,
     required String titulo,
     required String subtitulo,
   }) {
-    final hasPhoto = fotoUrl != null && fotoUrl.isNotEmpty;
+    final canAdd = fotos.length < ChecklistModel.maxFotosPorTipo;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -545,63 +597,79 @@ class _EquipmentChecklistWizardScreenState
             subtitulo,
             style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 24),
-          if (hasPhoto) ...[
-            Container(
-              width: double.infinity,
-              height: 240,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.success, width: 2),
-                color: Colors.black12,
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildImagePreview(fotoUrl),
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle, size: 14, color: AppColors.success),
-                          SizedBox(width: 4),
-                          Text('Foto Registrada',
-                              style: TextStyle(color: Colors.white, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          const SizedBox(height: 8),
+          Text(
+            '${fotos.length}/${ChecklistModel.maxFotosPorTipo} fotos',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
             ),
-            const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 16),
+          if (fotos.isNotEmpty)
             SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: _isUploadingPhoto ? null : () => _pickPhoto(tipo),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Tirar Outra Foto'),
+              height: 140,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: fotos.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final photo = fotos[index];
+                  return Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          width: 140,
+                          height: 140,
+                          child: _buildImagePreview(photo.url),
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: Material(
+                          color: Colors.black87,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _isUploadingPhoto
+                                ? null
+                                : () => _deletePhoto(tipo, photo),
+                            child: const Padding(
+                              padding: EdgeInsets.all(6),
+                              child: Icon(Icons.close, size: 16, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
-          ] else ...[
+          if (fotos.isNotEmpty) const SizedBox(height: 16),
+          if (_isUploadingPhoto)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('Enviando foto...'),
+                  ],
+                ),
+              ),
+            )
+          else if (canAdd)
             InkWell(
-              onTap: _isUploadingPhoto ? null : () => _pickPhoto(tipo),
+              onTap: () => _pickPhoto(tipo),
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 width: double.infinity,
-                height: 220,
+                height: fotos.isEmpty ? 180 : 72,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
@@ -611,50 +679,33 @@ class _EquipmentChecklistWizardScreenState
                   ),
                 ),
                 child: Center(
-                  child: _isUploadingPhoto
-                      ? const Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 12),
-                            Text('Enviando foto...'),
-                          ],
-                        )
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                size: 40,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Toque para abrir a câmera',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Ou escolha da galeria',
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
-                          ],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_a_photo,
+                        size: fotos.isEmpty ? 36 : 22,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        fotos.isEmpty ? 'Adicionar foto' : 'Adicionar outra foto',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
                         ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+            )
+          else
+            const Text(
+              'Limite de fotos atingido.',
+              style: TextStyle(color: AppColors.textSecondary),
             ),
-          ],
         ],
       ),
     );

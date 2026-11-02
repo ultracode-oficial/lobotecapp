@@ -1,7 +1,13 @@
 class ApiConstants {
   ApiConstants._();
 
-  static const String baseUrl = 'https://lobotec.ultracode.com.br/api';
+  /// Origem sem `/api` (via `--dart-define-from-file=.env` → `API_BASE_URL`).
+  static const String _apiOrigin = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://lobotec.ultracode.com.br',
+  );
+
+  static const String baseUrl = '$_apiOrigin/api';
   static const String platform = 'mobile';
 
   static const String login = '/auth/login';
@@ -31,6 +37,7 @@ class ApiConstants {
   static const String especializacoesOptions = '/especializacoes-options';
   static const String tipoServicosOptions = '/tipoServicos-options';
   static const String tipoEquipamentosOptions = '/tipoEquipamentos-options';
+  static const String marcasOptions = '/marcas-options';
 
   // --- Rotas de Execução do Técnico (/api/executar/*) ---
   static const String executarDashboard = '/executar/dashboard';
@@ -41,6 +48,7 @@ class ApiConstants {
 
   static const String executarAgenda = '/executar/agenda';
   static const String executarAgendaOcupacao = '/executar/agenda/ocupacao';
+  static const String executarHistorico = '/executar/historico';
 
   static String executarEtapaDetail(dynamic etapaId) => '/executar/etapas/$etapaId';
   static String executarEtapaCheckIn(dynamic etapaId) => '/executar/etapas/$etapaId/check-in';
@@ -58,6 +66,12 @@ class ApiConstants {
       '/executar/etapas/$etapaId/equipamentos/$eqServicoId/checklist';
   static String executarEquipamentoChecklistFoto(dynamic etapaId, dynamic eqServicoId) =>
       '/executar/etapas/$etapaId/equipamentos/$eqServicoId/checklist/foto';
+  static String executarEquipamentoChecklistFotoDelete(
+    dynamic etapaId,
+    dynamic eqServicoId,
+    dynamic fotoId,
+  ) =>
+      '/executar/etapas/$etapaId/equipamentos/$eqServicoId/checklist/fotos/$fotoId';
   static String executarEquipamentoFinalizar(dynamic etapaId, dynamic eqServicoId) =>
       '/executar/etapas/$etapaId/equipamentos/$eqServicoId/finalizar';
 

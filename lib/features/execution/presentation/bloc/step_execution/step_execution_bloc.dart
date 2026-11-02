@@ -121,8 +121,12 @@ class StepExecutionBloc extends Bloc<StepExecutionEvent, StepExecutionState> {
     Emitter<StepExecutionState> emit,
   ) async {
     emit(StepExecutionLoading());
-    final result =
-        await _uploadSignatureUseCase(event.etapaId, event.imagePath);
+    final result = await _uploadSignatureUseCase(
+      event.etapaId,
+      event.imagePath,
+      assinaturaNome: event.assinaturaNome,
+      assinaturaCpf: event.assinaturaCpf,
+    );
     await result.fold(
       (failure) async => emit(StepExecutionError(failure.message)),
       (url) async {

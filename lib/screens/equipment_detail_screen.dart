@@ -4,6 +4,7 @@ import '../core/colors.dart';
 import '../core/constants/api_constants.dart';
 import '../core/di/injection_container.dart';
 import '../features/execution/data/datasources/execution_remote_datasource.dart';
+import '../features/execution/data/models/checklist_model.dart';
 import '../features/execution/data/models/equipment_model.dart';
 import '../features/execution/data/models/task_model.dart';
 import '../widgets/custom_button.dart';
@@ -133,8 +134,7 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
 
   Future<void> _handleToggleTask(TaskModel task) async {
     // Validação obrigatória: É necessário preencher a vistoria inicial antes de executar tarefas
-    final hasFotoAntes = _equipment?.checklist?.fotoAntesUrl != null &&
-        _equipment!.checklist!.fotoAntesUrl!.isNotEmpty;
+    final hasFotoAntes = _equipment?.checklist?.hasFotoAntes == true;
     final isChecklistPreenchido = _equipment?.checklist?.isPreenchido == true;
 
     if (!hasFotoAntes || !isChecklistPreenchido) {
@@ -159,46 +159,42 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
       return;
     }
 
-    final newStatus = task.isFeito ? 'PENDENTE' : 'FEITO';
-
-    // Se estiver marcando a tarefa como FEITO, checa se esta é a última tarefa pendente do aparelho!
-    if (newStatus == 'FEITO') {
-      final tarefas = _equipment?.tarefas ?? [];
-      final outrasPendentes = tarefas.where((t) => !t.isFeito && t.id != task.id).length;
-      final isUltimaTarefa = outrasPendentes == 0;
-
-      if (isUltimaTarefa) {
-        // Ao concluir a última tarefa, o equipamento será finalizado.
-        // Garante que o checklist final (Foto do Depois / Temperatura) seja feito antes!
-        final checklist = _equipment?.checklist;
-        final hasFotoDepois = checklist?.fotoDepoisUrl != null && checklist!.fotoDepoisUrl!.isNotEmpty;
-
-        if (!hasFotoDepois) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Última tarefa! Registre a foto de conclusão (Depois) para finalizar.'),
-              backgroundColor: AppColors.primary,
-            ),
-          );
-          final completed = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(
-              builder: (_) => EquipmentChecklistWizardScreen(
-                etapaId: widget.etapaId,
-                equipmentId: widget.equipmentId,
-                checklist: checklist,
-                mode: ChecklistWizardMode.finalizacao,
-              ),
-            ),
-          );
-          if (completed != true) return;
-          await _loadEquipment();
-        }
+    // Desmarcar: só reabre a tarefa, sem formulário.
+    if (task.isFeito) {
+      try {
+        await _dataSource.toggleTask(task.id, status: 'PENDENTE');
+        _loadEquipment();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao atualizar tarefa: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
+      return;
+    }
+
+    // Marcar FEITO com formulário pendente: abre o formulário (ele mesmo conclui a tarefa).
+    if (task.temFormulario && task.formularioStatus != 'ENVIADO') {
+      final done = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TaskFormScreen(
+            tarefaId: task.id,
+            tarefaNome: task.nome,
+          ),
+        ),
+      );
+      if (done == true && mounted) {
+        await _loadEquipment();
+      }
+      return;
     }
 
     try {
-      await _dataSource.toggleTask(task.id, status: newStatus);
+      await _dataSource.toggleTask(task.id, status: 'FEITO');
       _loadEquipment();
     } catch (e) {
       if (!mounted) return;
@@ -214,7 +210,7 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
   Future<void> _handleFinalizeEquipment({bool confirmPendencias = false}) async {
     final checklist = _equipment?.checklist;
     final isChecklistPreenchido = checklist?.isPreenchido == true;
-    final hasFotoDepois = checklist?.fotoDepoisUrl != null && checklist!.fotoDepoisUrl!.isNotEmpty;
+    final hasFotoDepois = checklist?.hasFotoDepois == true;
 
     // Se ainda não tirou a foto do depois, abre a tela de finalização antes de enviar
     if (!hasFotoDepois) {
@@ -427,17 +423,19 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
               const SizedBox(height: 20),
             ],
 
-            _buildChecklistCard(eq),
-            const SizedBox(height: 20),
+            if (isEmAndamento || isFinalizado) ...[
+              _buildChecklistCard(eq),
+              const SizedBox(height: 20),
+              _buildTasksCard(eq),
+              const SizedBox(height: 32),
+            ],
 
-            _buildTasksCard(eq),
-            const SizedBox(height: 32),
-
-            if (!isFinalizado)
+            if (isEmAndamento &&
+                eq.tarefas.every((t) => t.isFeito))
               CustomButton(
                 text: 'FINALIZAR EQUIPAMENTO',
                 onPressed: () => _handleFinalizeEquipment(),
-                isPrimary: isEmAndamento,
+                isPrimary: true,
               ),
             const SizedBox(height: 24),
           ],
@@ -540,10 +538,10 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
   Widget _buildChecklistCard(EquipmentModel eq) {
     final checklist = eq.checklist;
     final isPreenchido = checklist?.isPreenchido == true;
-    final fotoAntes = checklist?.fotoAntesUrl;
-    final fotoDepois = checklist?.fotoDepoisUrl;
-    final hasFotoAntes = fotoAntes != null && fotoAntes.isNotEmpty;
-    final hasFotoDepois = fotoDepois != null && fotoDepois.isNotEmpty;
+    final fotosAntes = checklist?.fotosAntes ?? const <ChecklistPhoto>[];
+    final fotosDepois = checklist?.fotosDepois ?? const <ChecklistPhoto>[];
+    final hasFotoAntes = fotosAntes.isNotEmpty;
+    final hasFotoDepois = fotosDepois.isNotEmpty;
 
     return Card(
       elevation: 0,
@@ -575,26 +573,62 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
             ),
             const SizedBox(height: 12),
             _buildInfoRow(
-              'Foto do Antes:',
-              hasFotoAntes ? 'Registrada' : 'Pendente (Obrigatória no Início)',
+              'Fotos do Antes:',
+              hasFotoAntes
+                  ? '${fotosAntes.length} registrada(s)'
+                  : 'Pendente (Obrigatória no Início)',
             ),
             _buildInfoRow(
-              'Foto do Depois:',
-              hasFotoDepois ? 'Registrada' : 'Pendente (Obrigatória no Final)',
+              'Fotos do Depois:',
+              hasFotoDepois
+                  ? '${fotosDepois.length} registrada(s)'
+                  : 'Pendente (Obrigatória no Final)',
             ),
             if (hasFotoAntes || hasFotoDepois) ...[
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  if (hasFotoAntes) ...[
-                    _buildPhotoThumbnail('Foto Antes', fotoAntes),
-                    const SizedBox(width: 12),
-                  ],
-                  if (hasFotoDepois) ...[
-                    _buildPhotoThumbnail('Foto Depois', fotoDepois),
-                  ],
-                ],
-              ),
+              if (hasFotoAntes) ...[
+                const Text(
+                  'Antes',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  height: 72,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: fotosAntes.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (_, i) =>
+                        _buildPhotoThumbnail(null, fotosAntes[i].url),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (hasFotoDepois) ...[
+                const Text(
+                  'Depois',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  height: 72,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: fotosDepois.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (_, i) =>
+                        _buildPhotoThumbnail(null, fotosDepois[i].url),
+                  ),
+                ),
+              ],
             ],
             if (checklist != null && isPreenchido) ...[
               const SizedBox(height: 8),
@@ -657,34 +691,45 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
     );
   }
 
-  Widget _buildPhotoThumbnail(String label, String photoPath) {
+  Widget _buildPhotoThumbnail(String? label, String photoPath) {
     final resolvedUrl = ApiConstants.resolveStorageUrl(photoPath);
+
+    final thumb = GestureDetector(
+      onTap: () => _showImageDialog(resolvedUrl),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 72,
+          height: 72,
+          color: Colors.grey.shade200,
+          child: Image.network(
+            resolvedUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, error, stack) => const Icon(
+              Icons.broken_image,
+              color: Colors.grey,
+              size: 28,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (label == null) return thumb;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-        const SizedBox(height: 4),
-        GestureDetector(
-          onTap: () => _showImageDialog(resolvedUrl),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              width: 72,
-              height: 72,
-              color: Colors.grey.shade200,
-              child: Image.network(
-                resolvedUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, error, stack) => const Icon(
-                  Icons.broken_image,
-                  color: Colors.grey,
-                  size: 28,
-                ),
-              ),
-            ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
           ),
         ),
+        const SizedBox(height: 4),
+        thumb,
       ],
     );
   }
@@ -791,13 +836,46 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
                 onChanged: eq.isFinalizado ? null : (_) => _handleToggleTask(t),
               ),
               Expanded(
-                child: Text(
-                  t.nome,
-                  style: TextStyle(
-                    fontSize: 14,
-                    decoration: t.isFeito ? TextDecoration.lineThrough : null,
-                    color: t.isFeito ? AppColors.textSecondary : AppColors.textPrimary,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      t.nome,
+                      style: TextStyle(
+                        fontSize: 14,
+                        decoration: t.isFeito ? TextDecoration.lineThrough : null,
+                        color: t.isFeito
+                            ? AppColors.textSecondary
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    if (t.temFormulario) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.description_outlined,
+                            size: 13,
+                            color: t.formularioStatus == 'ENVIADO'
+                                ? AppColors.success
+                                : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            t.formularioStatus == 'ENVIADO'
+                                ? 'Formulário enviado'
+                                : 'Formulário',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: t.formularioStatus == 'ENVIADO'
+                                  ? AppColors.success
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],

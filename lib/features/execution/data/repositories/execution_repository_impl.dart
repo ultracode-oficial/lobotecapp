@@ -81,6 +81,18 @@ class ExecutionRepositoryImpl implements ExecutionRepository {
           ));
 
   @override
+  Future<Either<Failure, List<StepModel>>> getHistorico({
+    String? q,
+    String? data,
+    int perPage = 50,
+  }) =>
+      _execute(() => _dataSource.getHistorico(
+            q: q,
+            data: data,
+            perPage: perPage,
+          ));
+
+  @override
   Future<Either<Failure, StepModel>> getStepDetail(int etapaId) =>
       _execute(() => _dataSource.getStepDetail(etapaId));
 
@@ -95,9 +107,16 @@ class ExecutionRepositoryImpl implements ExecutionRepository {
   @override
   Future<Either<Failure, String>> uploadSignature(
     int etapaId,
-    String imagePath,
-  ) =>
-      _execute(() => _dataSource.uploadSignature(etapaId, imagePath));
+    String imagePath, {
+    required String assinaturaNome,
+    required String assinaturaCpf,
+  }) =>
+      _execute(() => _dataSource.uploadSignature(
+            etapaId,
+            imagePath,
+            assinaturaNome: assinaturaNome,
+            assinaturaCpf: assinaturaCpf,
+          ));
 
   @override
   Future<Either<Failure, Map<String, dynamic>>> finalizeStep(

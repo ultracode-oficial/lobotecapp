@@ -32,6 +32,12 @@ abstract class ExecutionRepository {
     required String dataFim,
   });
 
+  Future<Either<Failure, List<StepModel>>> getHistorico({
+    String? q,
+    String? data,
+    int perPage = 50,
+  });
+
   Future<Either<Failure, StepModel>> getStepDetail(int etapaId);
 
   Future<Either<Failure, StepModel>> performCheckIn(
@@ -42,8 +48,10 @@ abstract class ExecutionRepository {
 
   Future<Either<Failure, String>> uploadSignature(
     int etapaId,
-    String imagePath,
-  );
+    String imagePath, {
+    required String assinaturaNome,
+    required String assinaturaCpf,
+  });
 
   Future<Either<Failure, Map<String, dynamic>>> finalizeStep(
     int etapaId, {

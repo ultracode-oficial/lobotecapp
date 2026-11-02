@@ -36,17 +36,10 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
   String? _selectedType;
   bool _isSaving = false;
 
-  final List<String> _brands = [
-    'Daikin',
-    'LG',
-    'Samsung',
-    'Midea',
-    'Gree',
-    'Carrier',
-    'Fujitsu',
-    'Elgin',
-    'Outro'
-  ];
+  List<String> _brands = [];
+  bool _brandsLoading = true;
+  String? _brandsError;
+
   final List<String> _types = [
     'Hi-Wall',
     'Cassete',
@@ -70,13 +63,49 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
     _obsController =
         TextEditingController(text: widget.equipment.observacoes ?? '');
 
-    if (widget.equipment.marca != null &&
-        _brands.contains(widget.equipment.marca)) {
-      _selectedBrand = widget.equipment.marca;
-    }
     if (widget.equipment.tipoEquipamento != null &&
         _types.contains(widget.equipment.tipoEquipamento)) {
       _selectedType = widget.equipment.tipoEquipamento;
+    }
+
+    _loadBrands();
+  }
+
+  Future<void> _loadBrands() async {
+    setState(() {
+      _brandsLoading = true;
+      _brandsError = null;
+    });
+
+    try {
+      final dataSource = getIt<ExecutionRemoteDataSource>();
+      final names = await dataSource.getMarcasOptions();
+      final brands = List<String>.from(names);
+
+      final current = widget.equipment.marca?.trim();
+      if (current != null &&
+          current.isNotEmpty &&
+          !brands.contains(current)) {
+        brands.insert(0, current);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _brands = brands;
+        if (current != null &&
+            current.isNotEmpty &&
+            brands.contains(current)) {
+          _selectedBrand = current;
+        }
+        _brandsLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Erro ao carregar marcas: $e');
+      if (!mounted) return;
+      setState(() {
+        _brandsLoading = false;
+        _brandsError = 'Não foi possível carregar as marcas.';
+      });
     }
   }
 
@@ -117,7 +146,8 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
     try {
       final etapaId = widget.etapaId;
       if (etapaId == null || etapaId <= 0) {
-        throw Exception('Etapa não identificada. Volte e abra o equipamento novamente.');
+        throw Exception(
+            'Etapa não identificada. Volte e abra o equipamento novamente.');
       }
       final tipoId = widget.equipment.tipoEquipamentoId;
       if (tipoId == null) {
@@ -158,7 +188,8 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao salvar ficha do equipamento: ${_errorMessage(e)}'),
+            content: Text(
+                'Erro ao salvar ficha do equipamento: ${_errorMessage(e)}'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -209,17 +240,47 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
                   controller: _locationController,
                 ),
                 const SizedBox(height: 16),
-                _buildDropdownField(
-                  label: 'Marca',
-                  hint: 'Selecione a marca',
-                  value: _selectedBrand,
-                  items: _brands,
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedBrand = val;
-                    });
-                  },
-                ),
+                if (_brandsLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Carregando marcas...'),
+                      ],
+                    ),
+                  )
+                else if (_brandsError != null)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _brandsError!,
+                        style: const TextStyle(color: AppColors.error),
+                      ),
+                      TextButton(
+                        onPressed: _loadBrands,
+                        child: const Text('Tentar novamente'),
+                      ),
+                    ],
+                  )
+                else
+                  _buildDropdownField(
+                    label: 'Marca',
+                    hint: 'Selecione a marca',
+                    value: _selectedBrand,
+                    items: _brands,
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedBrand = val;
+                      });
+                    },
+                  ),
                 const SizedBox(height: 16),
                 _buildDropdownField(
                   label: 'Tipo de Equipamento',
@@ -279,6 +340,9 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
     required List<String> items,
     required ValueChanged<String?> onChanged,
   }) {
+    final effectiveValue =
+        value != null && items.contains(value) ? value : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -292,7 +356,7 @@ class _EquipmentRegisterScreenState extends State<EquipmentRegisterScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: value,
+          initialValue: effectiveValue,
           hint: Text(hint,
               style: const TextStyle(color: AppColors.textSecondary)),
           items: items.map((brand) {

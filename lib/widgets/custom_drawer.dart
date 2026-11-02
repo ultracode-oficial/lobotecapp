@@ -109,8 +109,8 @@ class CustomDrawer extends StatelessWidget {
                 },
               ),
               _buildDrawerItem(
-                icon: Icons.group,
-                title: 'Equipes & Parceiros',
+                icon: Icons.history,
+                title: 'Histórico',
                 isSelected: currentIndex == 3,
                 onTap: () {
                   Navigator.pop(context);

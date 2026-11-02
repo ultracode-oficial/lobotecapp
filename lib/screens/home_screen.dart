@@ -16,7 +16,7 @@ import 'agenda_screen.dart';
 import 'profile_screen.dart';
 import 'service_orders_screen.dart';
 import 'step_execution_screen.dart';
-import 'teams_screen.dart';
+import 'history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const _HomeContent(),
     const AgendaScreen(),
     const ServiceOrdersScreen(),
-    const TeamsScreen(),
+    const HistoryScreen(),
     const ProfileScreen(),
   ];
 
@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
                 BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Agenda'),
                 BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'Ordens'),
-                BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Equipes'),
+                BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Histórico'),
                 BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
               ],
             ),
@@ -595,8 +595,8 @@ class _HomeContentState extends State<_HomeContent>
         ),
         const SizedBox(width: 10),
         _buildActionTile(
-          icon: Icons.group,
-          label: 'Equipes',
+          icon: Icons.history,
+          label: 'Histórico',
           onTap: () => AppState().setHomeIndex(3),
         ),
         const SizedBox(width: 10),

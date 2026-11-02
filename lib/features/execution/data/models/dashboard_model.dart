@@ -36,10 +36,9 @@ class DashboardModel {
       etapasFeitas: _toInt(json['etapas_feitas']) ?? 0,
       etapasTotal: _toInt(json['etapas_total']) ?? 0,
       tempoMedioMinutos: _toInt(json['tempo_medio_minutos']),
-      proximoServico: json['proximo_servico'] != null &&
-              json['proximo_servico'] is Map<String, dynamic>
+      proximoServico: json['proximo_servico'] is Map
           ? ProximoServicoModel.fromJson(
-              json['proximo_servico'] as Map<String, dynamic>)
+              Map<String, dynamic>.from(json['proximo_servico'] as Map))
           : null,
     );
   }
