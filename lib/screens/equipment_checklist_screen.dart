@@ -77,100 +77,122 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
       tipo == 'antes' ? _fotosAntes : _fotosDepois;
 
   Future<void> _pickAndUploadPhoto(String tipo) async {
-    if (_fotosOf(tipo).length >= ChecklistModel.maxFotosPorTipo) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Limite de ${ChecklistModel.maxFotosPorTipo} fotos atingido.',
-          ),
-          backgroundColor: AppColors.warning,
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Tirar Foto com a Câmera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Escolher da Galeria'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
         ),
+      ),
+    );
+
+    if (source == null) return;
+
+    final List<XFile> files;
+    if (source == ImageSource.gallery) {
+      files = await _picker.pickMultiImage(
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
       );
-      return;
+    } else {
+      final picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      files = picked == null ? const [] : [picked];
     }
 
+    if (files.isEmpty) return;
+
+    await _uploadPhotos(tipo, files);
+  }
+
+  Future<void> _uploadPhotos(String tipo, List<XFile> files) async {
+    setState(() => _isUploadingPhoto = true);
+
+    final dataSource = getIt<ExecutionRemoteDataSource>();
+    var enviadas = 0;
+    Object? lastError;
+
     try {
-      final XFile? picked = await showModalBottomSheet<XFile?>(
-        context: context,
-        builder: (ctx) => SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Tirar Foto com a Câmera'),
-                onTap: () async {
-                  final file =
-                      await _picker.pickImage(source: ImageSource.camera);
-                  if (ctx.mounted) Navigator.pop(ctx, file);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Escolher da Galeria'),
-                onTap: () async {
-                  final file =
-                      await _picker.pickImage(source: ImageSource.gallery);
-                  if (ctx.mounted) Navigator.pop(ctx, file);
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-
-      if (picked == null) return;
-
-      setState(() => _isUploadingPhoto = true);
-
-      final dataSource = getIt<ExecutionRemoteDataSource>();
-      final res = await dataSource.uploadChecklistPhoto(
-        widget.etapaId,
-        widget.equipmentId,
-        tipo: tipo,
-        imagePath: picked.path,
-      );
-
-      final returnedUrl = res['url']?.toString() ??
-          res['path']?.toString() ??
-          picked.path;
-
-      if (mounted) {
-        setState(() {
-          final photo = ChecklistPhoto(
-            id: res['id'] is int
-                ? res['id'] as int
-                : int.tryParse(res['id']?.toString() ?? ''),
-            url: returnedUrl,
-            path: res['path']?.toString(),
-            sortOrder: res['sort_order'] is int
-                ? res['sort_order'] as int
-                : _fotosOf(tipo).length,
+      for (final file in files) {
+        try {
+          final res = await dataSource.uploadChecklistPhoto(
+            widget.etapaId,
+            widget.equipmentId,
+            tipo: tipo,
+            imagePath: file.path,
           );
-          if (tipo == 'antes') {
-            _fotosAntes = [..._fotosAntes, photo];
-          } else {
-            _fotosDepois = [..._fotosDepois, photo];
-          }
-          _isUploadingPhoto = false;
-        });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Foto "$tipo" enviada com sucesso!'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+          final returnedUrl = res['url']?.toString() ??
+              res['path']?.toString() ??
+              file.path;
+
+          if (!mounted) return;
+          setState(() {
+            final photo = ChecklistPhoto(
+              id: res['id'] is int
+                  ? res['id'] as int
+                  : int.tryParse(res['id']?.toString() ?? ''),
+              url: returnedUrl,
+              path: res['path']?.toString(),
+              sortOrder: res['sort_order'] is int
+                  ? res['sort_order'] as int
+                  : _fotosOf(tipo).length,
+            );
+            if (tipo == 'antes') {
+              _fotosAntes = [..._fotosAntes, photo];
+            } else {
+              _fotosDepois = [..._fotosDepois, photo];
+            }
+          });
+          enviadas++;
+        } catch (e) {
+          lastError = e;
+          break;
+        }
       }
-    } catch (e) {
+    } finally {
       if (mounted) {
         setState(() => _isUploadingPhoto = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao enviar foto: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
       }
+    }
+
+    if (!mounted) return;
+
+    if (enviadas > 0) {
+      final msg = enviadas == 1
+          ? 'Foto "$tipo" enviada com sucesso!'
+          : '$enviadas fotos "$tipo" enviadas com sucesso!';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: AppColors.success),
+      );
+    }
+
+    if (lastError != null) {
+      final prefix = enviadas > 0
+          ? 'Parte das fotos falhou: '
+          : 'Erro ao enviar foto: ';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$prefix$lastError'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -438,13 +460,15 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
     required String tipo,
     required List<ChecklistPhoto> fotos,
   }) {
-    final canAdd = fotos.length < ChecklistModel.maxFotosPorTipo;
+    final countLabel = fotos.isEmpty
+        ? label
+        : '$label (${fotos.length})';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '$label (${fotos.length}/${ChecklistModel.maxFotosPorTipo})',
+          countLabel,
           style: const TextStyle(
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
@@ -499,7 +523,7 @@ class _EquipmentChecklistScreenState extends State<EquipmentChecklistScreen> {
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Center(child: CircularProgressIndicator()),
           )
-        else if (canAdd)
+        else
           OutlinedButton.icon(
             onPressed: () => _pickAndUploadPhoto(tipo),
             icon: const Icon(Icons.add_a_photo, size: 18),

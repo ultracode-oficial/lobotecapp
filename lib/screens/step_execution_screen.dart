@@ -13,6 +13,7 @@ import '../widgets/custom_button.dart';
 import '../widgets/status_badge.dart';
 import 'checkin_map_screen.dart';
 import 'equipment_detail_screen.dart';
+import 'equipment_history_detail_screen.dart';
 import 'signature_capture_screen.dart';
 
 class StepExecutionScreen extends StatelessWidget {
@@ -272,7 +273,8 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
                       (eq) => _buildEquipmentCard(
                         context,
                         eq,
-                        isCheckedIn && !isFinalized,
+                        isCheckedIn || isFinalized,
+                        isFinalized: isFinalized,
                       ),
                     ),
                   const SizedBox(height: 24),
@@ -641,18 +643,21 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
   Widget _buildEquipmentCard(
     BuildContext context,
     EquipmentModel eq,
-    bool isActive,
-  ) {
+    bool isActive, {
+    bool isFinalized = false,
+  }) {
     String status = 'Aguardando Início';
     Color statusColor = AppColors.warning;
     String subtext = 'Toque para iniciar execução';
     Color subtextColor = AppColors.textSecondary;
+    IconData trailingIcon = Icons.play_circle_outline;
 
-    if (eq.isFinalizado) {
+    if (isFinalized || eq.isFinalizado) {
       status = 'Finalizado';
       statusColor = AppColors.success;
-      subtext = 'Equipamento concluído com sucesso';
+      subtext = 'Toque para ver os detalhes';
       subtextColor = AppColors.success;
+      trailingIcon = Icons.visibility_outlined;
     } else if (eq.isEmAndamento) {
       status = 'Em Andamento';
       statusColor = AppColors.primary;
@@ -662,6 +667,10 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
     } else if (eq.isGeneric || eq.registroPendente) {
       subtext = 'TAG não cadastrada';
       subtextColor = AppColors.textSecondary;
+    }
+
+    if (!isActive) {
+      trailingIcon = Icons.lock_outline;
     }
 
     final brandModel = [
@@ -677,23 +686,29 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: isActive
-              ? (eq.isFinalizado ? AppColors.success : AppColors.primary.withValues(alpha: 0.3))
+              ? (eq.isFinalizado || isFinalized
+                  ? AppColors.success
+                  : AppColors.primary.withValues(alpha: 0.3))
               : AppColors.border,
-          width: eq.isFinalizado ? 1.5 : 1,
+          width: eq.isFinalizado || isFinalized ? 1.5 : 1,
         ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: isActive
             ? () {
+                final Widget detailScreen = (isFinalized || eq.isFinalizado)
+                    ? EquipmentHistoryDetailScreen(
+                        etapaId: widget.etapaId,
+                        equipmentId: eq.id,
+                      )
+                    : EquipmentDetailScreen(
+                        etapaId: widget.etapaId,
+                        equipmentId: eq.id,
+                      );
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => EquipmentDetailScreen(
-                      etapaId: widget.etapaId,
-                      equipmentId: eq.id,
-                    ),
-                  ),
+                  MaterialPageRoute(builder: (_) => detailScreen),
                 ).then((_) {
                   if (context.mounted) {
                     context
@@ -780,7 +795,7 @@ class _StepExecutionViewState extends State<_StepExecutionView> {
                   Row(
                     children: [
                       Icon(
-                        isActive ? Icons.play_circle_outline : Icons.lock_outline,
+                        trailingIcon,
                         size: 16,
                         color: subtextColor,
                       ),

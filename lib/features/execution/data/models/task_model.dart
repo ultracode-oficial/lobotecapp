@@ -18,6 +18,7 @@ class TaskModel {
   final String status;
   final bool temFormulario;
   final String? formularioStatus;
+  final String? feitoAt;
 
   TaskModel({
     required this.id,
@@ -25,6 +26,7 @@ class TaskModel {
     required this.status,
     this.temFormulario = false,
     this.formularioStatus,
+    this.feitoAt,
   });
 
   bool get isFeito => status == 'FEITO';
@@ -53,6 +55,7 @@ class TaskModel {
       status: json['status']?.toString() ?? 'PENDENTE',
       temFormulario: _toBool(json['tem_formulario']),
       formularioStatus: json['formulario_status']?.toString(),
+      feitoAt: json['feito_at']?.toString(),
     );
   }
 }

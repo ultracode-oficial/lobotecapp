@@ -95,18 +95,6 @@ class _EquipmentChecklistWizardScreenState
       tipo == 'antes' ? _fotosAntes : _fotosDepois;
 
   Future<void> _pickPhoto(String tipo) async {
-    if (_fotosOf(tipo).length >= ChecklistModel.maxFotosPorTipo) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Limite de ${ChecklistModel.maxFotosPorTipo} fotos atingido.',
-          ),
-          backgroundColor: AppColors.warning,
-        ),
-      );
-      return;
-    }
-
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -132,60 +120,96 @@ class _EquipmentChecklistWizardScreenState
 
     if (source == null) return;
 
-    final picked = await _picker.pickImage(
-      source: source,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
-    if (picked == null) return;
+    final List<XFile> files;
+    if (source == ImageSource.gallery) {
+      files = await _picker.pickMultiImage(
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+    } else {
+      final picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      files = picked == null ? const [] : [picked];
+    }
 
+    if (files.isEmpty) return;
+
+    await _uploadPhotos(tipo, files);
+  }
+
+  Future<void> _uploadPhotos(String tipo, List<XFile> files) async {
     setState(() => _isUploadingPhoto = true);
 
+    var enviadas = 0;
+    Object? lastError;
+
     try {
-      final res = await _ds.uploadChecklistPhoto(
-        widget.etapaId,
-        widget.equipmentId,
-        tipo: tipo,
-        imagePath: picked.path,
-      );
+      for (final file in files) {
+        try {
+          final res = await _ds.uploadChecklistPhoto(
+            widget.etapaId,
+            widget.equipmentId,
+            tipo: tipo,
+            imagePath: file.path,
+          );
 
-      final url = res['url']?.toString() ??
-          res['path']?.toString() ??
-          picked.path;
+          final url = res['url']?.toString() ??
+              res['path']?.toString() ??
+              file.path;
 
-      if (!mounted) return;
-      setState(() {
-        final photo = ChecklistPhoto(
-          id: res['id'] is int
-              ? res['id'] as int
-              : int.tryParse(res['id']?.toString() ?? ''),
-          url: url,
-          path: res['path']?.toString(),
-          sortOrder: res['sort_order'] is int
-              ? res['sort_order'] as int
-              : _fotosOf(tipo).length,
-        );
-        if (tipo == 'antes') {
-          _fotosAntes = [..._fotosAntes, photo];
-        } else {
-          _fotosDepois = [..._fotosDepois, photo];
+          if (!mounted) return;
+          setState(() {
+            final photo = ChecklistPhoto(
+              id: res['id'] is int
+                  ? res['id'] as int
+                  : int.tryParse(res['id']?.toString() ?? ''),
+              url: url,
+              path: res['path']?.toString(),
+              sortOrder: res['sort_order'] is int
+                  ? res['sort_order'] as int
+                  : _fotosOf(tipo).length,
+            );
+            if (tipo == 'antes') {
+              _fotosAntes = [..._fotosAntes, photo];
+            } else {
+              _fotosDepois = [..._fotosDepois, photo];
+            }
+          });
+          enviadas++;
+        } catch (e) {
+          lastError = e;
+          break;
         }
-        _isUploadingPhoto = false;
-      });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+      }
+    }
 
+    if (!mounted) return;
+
+    if (enviadas > 0) {
+      final msg = enviadas == 1
+          ? 'Foto "$tipo" salva com sucesso!'
+          : '$enviadas fotos "$tipo" salvas com sucesso!';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Foto "$tipo" salva com sucesso!'),
-          backgroundColor: AppColors.success,
-        ),
+        SnackBar(content: Text(msg), backgroundColor: AppColors.success),
       );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isUploadingPhoto = false);
+    }
+
+    if (lastError != null) {
+      final prefix = enviadas > 0
+          ? 'Parte das fotos falhou: '
+          : 'Erro ao enviar foto: ';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Erro ao enviar foto: $e'),
+          content: Text('$prefix$lastError'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -426,7 +450,7 @@ class _EquipmentChecklistWizardScreenState
         fotos: _fotosAntes,
         titulo: 'Fotos do Aparelho (Antes)',
         subtitulo:
-            'Registre como o equipamento foi encontrado. Até ${ChecklistModel.maxFotosPorTipo} fotos.',
+            'Registre como o equipamento foi encontrado. Quantas fotos precisar.',
       ),
     ];
 
@@ -444,7 +468,7 @@ class _EquipmentChecklistWizardScreenState
         fotos: _fotosDepois,
         titulo: 'Fotos do Serviço Concluído (Depois)',
         subtitulo:
-            'Registre o equipamento pronto. Até ${ChecklistModel.maxFotosPorTipo} fotos.',
+            'Registre o equipamento pronto. Quantas fotos precisar.',
       ),
       _buildCardTemperaturaEObservacoes(),
     ];
@@ -577,8 +601,6 @@ class _EquipmentChecklistWizardScreenState
     required String titulo,
     required String subtitulo,
   }) {
-    final canAdd = fotos.length < ChecklistModel.maxFotosPorTipo;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -597,15 +619,17 @@ class _EquipmentChecklistWizardScreenState
             subtitulo,
             style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 8),
-          Text(
-            '${fotos.length}/${ChecklistModel.maxFotosPorTipo} fotos',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary,
+          if (fotos.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${fotos.length} ${fotos.length == 1 ? 'foto' : 'fotos'}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: 16),
           if (fotos.isNotEmpty)
             SizedBox(
@@ -663,7 +687,7 @@ class _EquipmentChecklistWizardScreenState
                 ),
               ),
             )
-          else if (canAdd)
+          else
             InkWell(
               onTap: () => _pickPhoto(tipo),
               borderRadius: BorderRadius.circular(16),
@@ -700,11 +724,6 @@ class _EquipmentChecklistWizardScreenState
                   ),
                 ),
               ),
-            )
-          else
-            const Text(
-              'Limite de fotos atingido.',
-              style: TextStyle(color: AppColors.textSecondary),
             ),
         ],
       ),

@@ -343,13 +343,13 @@ Opcionais: `solucao`, `material`, `tempo_resolucao`, `temperatura`, `observacoes
 Fotos **não** vão neste PUT — só via endpoints de foto.
 Marca `status_checklist = PREENCHIDO`.
 
-No detalhe do equipamento, `checklist` traz `fotos_antes` / `fotos_depois` (até **10** cada: `{ id, path, url, sort_order }`). Compat: `foto_antes` / `foto_depois` / `foto_*_url` = primeira foto.
+No detalhe do equipamento, `checklist` traz `fotos_antes` / `fotos_depois` (lista ilimitada: `{ id, path, url, sort_order }`). Compat: `foto_antes` / `foto_depois` / `foto_*_url` = primeira foto.
 
 ### Foto do checklist (append)
 `POST …/equipamentos/{equipamentoServico}/checklist/foto`
 
 Multipart: `tipo` = `antes` ou `depois`, arquivo `foto` (imagem, máx. 5 MB).
-**Acumula** (não substitui). Limite 10 por tipo (422 se exceder). Resposta: `{ id, tipo, path, url, sort_order, campo }`.
+**Acumula** (não substitui). Sem limite por tipo. Resposta: `{ id, tipo, path, url, sort_order, campo }`.
 
 ### Remover foto do checklist
 `DELETE …/equipamentos/{equipamentoServico}/checklist/fotos/{foto}`

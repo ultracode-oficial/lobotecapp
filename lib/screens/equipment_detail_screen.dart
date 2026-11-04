@@ -480,7 +480,7 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
             _buildInfoRow('Marca/Modelo:', '${eq.marca ?? '-'} ${eq.modelo ?? ''}'),
             _buildInfoRow('Capacidade:', eq.btu != null ? '${eq.btu} BTU' : '-'),
             _buildInfoRow('Localização:', eq.localizacao ?? '-'),
-            if (eq.isGeneric) ...[
+            if (eq.isGeneric && !eq.isFinalizado) ...[
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -632,59 +632,79 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
             ],
             if (checklist != null && isPreenchido) ...[
               const SizedBox(height: 8),
-              _buildInfoRow('Condição:', checklist.statusEquipamento ?? 'OK'),
+              _buildInfoRow(
+                'Condição:',
+                checklist.hasProblema
+                    ? 'Necessita de Corretiva'
+                    : (checklist.statusEquipamento == 'OK'
+                        ? 'Normal'
+                        : (checklist.statusEquipamento ?? 'OK')),
+              ),
               if (checklist.hasProblema) ...[
                 _buildInfoRow('Problema:', checklist.problema ?? '-'),
-                _buildInfoRow('Solução:', checklist.solucao ?? '-'),
+                if (checklist.solucao != null && checklist.solucao!.isNotEmpty)
+                  _buildInfoRow('Solução:', checklist.solucao!),
               ],
-              if (checklist.temperatura != null)
+              if (checklist.material != null && checklist.material!.isNotEmpty)
+                _buildInfoRow('Material:', checklist.material!),
+              if (checklist.tempoResolucao != null &&
+                  checklist.tempoResolucao!.isNotEmpty)
+                _buildInfoRow('Tempo de resolução:', checklist.tempoResolucao!),
+              if (checklist.temperatura != null &&
+                  checklist.temperatura!.isNotEmpty)
                 _buildInfoRow('Temperatura Final:', '${checklist.temperatura}°C'),
+              if (checklist.observacoes != null &&
+                  checklist.observacoes!.isNotEmpty)
+                _buildInfoRow('Observações:', checklist.observacoes!),
             ],
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: Icon(hasFotoAntes ? Icons.check_circle : Icons.camera_alt, size: 16),
-                    label: Text(hasFotoAntes ? 'Vistoria Inicial OK' : 'Fazer Vistoria'),
-                    onPressed: eq.isFinalizado
-                        ? null
-                        : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EquipmentChecklistWizardScreen(
-                                  etapaId: widget.etapaId,
-                                  equipmentId: widget.equipmentId,
-                                  checklist: checklist,
-                                  mode: ChecklistWizardMode.inicial,
-                                ),
-                              ),
-                            ).then((_) => _loadEquipment());
-                          },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Visualizar / Editar Completo',
-                  icon: const Icon(Icons.edit_note, color: AppColors.primary),
-                  onPressed: eq.isFinalizado
-                      ? null
-                      : () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EquipmentChecklistScreen(
-                                etapaId: widget.etapaId,
-                                equipmentId: widget.equipmentId,
-                                checklist: checklist,
-                              ),
+            if (!eq.isFinalizado) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: Icon(
+                        hasFotoAntes ? Icons.check_circle : Icons.camera_alt,
+                        size: 16,
+                      ),
+                      label: Text(
+                        hasFotoAntes ? 'Vistoria Inicial OK' : 'Fazer Vistoria',
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => EquipmentChecklistWizardScreen(
+                              etapaId: widget.etapaId,
+                              equipmentId: widget.equipmentId,
+                              checklist: checklist,
+                              mode: ChecklistWizardMode.inicial,
                             ),
-                          ).then((_) => _loadEquipment());
-                        },
-                ),
-              ],
-            ),
+                          ),
+                        ).then((_) => _loadEquipment());
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Visualizar / Editar Completo',
+                    icon: const Icon(Icons.edit_note, color: AppColors.primary),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EquipmentChecklistScreen(
+                            etapaId: widget.etapaId,
+                            equipmentId: widget.equipmentId,
+                            checklist: checklist,
+                          ),
+                        ),
+                      ).then((_) => _loadEquipment());
+                    },
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -821,11 +841,30 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
   }
 
   Widget _buildTaskItem(EquipmentModel eq, TaskModel t) {
+    final canViewForm = eq.isFinalizado &&
+        t.temFormulario &&
+        t.formularioStatus == 'ENVIADO';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: eq.isFinalizado ? null : () => _handleToggleTask(t),
+        onTap: eq.isFinalizado
+            ? (canViewForm
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TaskFormScreen(
+                          tarefaId: t.id,
+                          tarefaNome: t.nome,
+                          readOnly: true,
+                        ),
+                      ),
+                    );
+                  }
+                : null)
+            : () => _handleToggleTask(t),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
@@ -863,7 +902,9 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
                           const SizedBox(width: 4),
                           Text(
                             t.formularioStatus == 'ENVIADO'
-                                ? 'Formulário enviado'
+                                ? (eq.isFinalizado
+                                    ? 'Formulário enviado — toque para ver'
+                                    : 'Formulário enviado')
                                 : 'Formulário',
                             style: TextStyle(
                               fontSize: 11,
@@ -878,6 +919,12 @@ class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
                   ],
                 ),
               ),
+              if (canViewForm)
+                const Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
             ],
           ),
         ),

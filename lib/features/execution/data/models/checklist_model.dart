@@ -27,8 +27,6 @@ class ChecklistPhoto {
 }
 
 class ChecklistModel {
-  static const int maxFotosPorTipo = 10;
-
   final String statusChecklist;
   final String? statusEquipamento;
   final String? problema;

@@ -107,11 +107,13 @@ class _FormQuestion {
 class TaskFormScreen extends StatefulWidget {
   final int tarefaId;
   final String tarefaNome;
+  final bool readOnly;
 
   const TaskFormScreen({
     super.key,
     required this.tarefaId,
     required this.tarefaNome,
+    this.readOnly = false,
   });
 
   @override
@@ -129,6 +131,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
   int? _versaoId;
   String? _envioStatus;
+
+  bool get _isReadOnly => widget.readOnly || _envioStatus == 'ENVIADO';
 
   List<_FormQuestion> _questions = [];
 
@@ -656,9 +660,12 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         return TextField(
           controller: _textControllers[q.id],
           maxLines: 3,
+          readOnly: _isReadOnly,
           decoration: InputDecoration(
             hintText: q.placeholder ?? 'Digite aqui...',
             border: const OutlineInputBorder(),
+            filled: _isReadOnly,
+            fillColor: _isReadOnly ? Colors.grey.shade50 : null,
           ),
         );
 
@@ -666,11 +673,14 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         final unit = q.config?['unit']?.toString();
         return TextField(
           controller: _textControllers[q.id],
+          readOnly: _isReadOnly,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
             hintText: q.placeholder ?? '0.00',
             suffixText: unit != null && unit.isNotEmpty ? unit : null,
             border: const OutlineInputBorder(),
+            filled: _isReadOnly,
+            fillColor: _isReadOnly ? Colors.grey.shade50 : null,
           ),
         );
 
@@ -717,7 +727,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
               divisions: divisions,
               activeColor: AppColors.primary,
               label: '${val.toStringAsFixed(1)} $unit',
-              onChanged: (newVal) => setState(() => _rangeValues[q.id] = newVal),
+              onChanged: _isReadOnly
+                  ? null
+                  : (newVal) => setState(() => _rangeValues[q.id] = newVal),
             ),
           ],
         );
@@ -735,7 +747,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                     : 'Selecionar data e hora');
 
         return OutlinedButton.icon(
-          onPressed: () => q.type == 'time' ? _pickTime(q) : _pickDate(q),
+          onPressed: _isReadOnly
+              ? null
+              : () => q.type == 'time' ? _pickTime(q) : _pickDate(q),
           icon: Icon(
             q.type == 'time' ? Icons.access_time : Icons.calendar_today,
             color: AppColors.primary,
@@ -751,9 +765,12 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         return DropdownButtonFormField<int>(
           initialValue: _selectedSingleOption[q.id],
           isExpanded: true,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            filled: _isReadOnly,
+            fillColor: _isReadOnly ? Colors.grey.shade50 : null,
           ),
           hint: Text(q.placeholder ?? 'Selecione uma opção'),
           items: q.options
@@ -762,17 +779,21 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                     child: Text(o.label),
                   ))
               .toList(),
-          onChanged: (val) => setState(() {
-            if (val != null) _selectedSingleOption[q.id] = val;
-          }),
+          onChanged: _isReadOnly
+              ? null
+              : (val) => setState(() {
+                    if (val != null) _selectedSingleOption[q.id] = val;
+                  }),
         );
 
       case 'radio':
         return RadioGroup<int>(
           groupValue: _selectedSingleOption[q.id],
-          onChanged: (val) => setState(() {
-            if (val != null) _selectedSingleOption[q.id] = val;
-          }),
+          onChanged: _isReadOnly
+              ? (_) {}
+              : (val) => setState(() {
+                    if (val != null) _selectedSingleOption[q.id] = val;
+                  }),
           child: Column(
             children: q.options
                 .map((o) => RadioListTile<int>(
@@ -780,6 +801,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                       dense: true,
                       title: Text(o.label),
                       value: o.id,
+                      enabled: !_isReadOnly,
                     ))
                 .toList(),
           ),
@@ -794,14 +816,17 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                     dense: true,
                     title: Text(o.label),
                     value: selectedSet.contains(o.id),
-                    onChanged: (checked) => setState(() {
-                      final set = _selectedMultiOptions.putIfAbsent(q.id, () => <int>{});
-                      if (checked == true) {
-                        set.add(o.id);
-                      } else {
-                        set.remove(o.id);
-                      }
-                    }),
+                    onChanged: _isReadOnly
+                        ? null
+                        : (checked) => setState(() {
+                              final set = _selectedMultiOptions.putIfAbsent(
+                                  q.id, () => <int>{});
+                              if (checked == true) {
+                                set.add(o.id);
+                              } else {
+                                set.remove(o.id);
+                              }
+                            }),
                   ))
               .toList(),
         );
@@ -876,7 +901,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                   Text('Enviando anexo...', style: TextStyle(fontSize: 13)),
                 ],
               ),
-            ] else ...[
+            ] else if (!_isReadOnly) ...[
               Row(
                 children: [
                   OutlinedButton.icon(
@@ -899,7 +924,12 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       default:
         return TextField(
           controller: _textControllers[q.id],
-          decoration: const InputDecoration(border: OutlineInputBorder()),
+          readOnly: _isReadOnly,
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            filled: _isReadOnly,
+            fillColor: _isReadOnly ? Colors.grey.shade50 : null,
+          ),
         );
     }
   }
@@ -1044,21 +1074,21 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
     return Column(
       children: [
-        if (_envioStatus != null)
+        if (_envioStatus != null || _isReadOnly)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: _envioStatus == 'ENVIADO'
+            color: _isReadOnly
                 ? AppColors.success.withValues(alpha: 0.1)
                 : Colors.blue.withValues(alpha: 0.1),
             child: Text(
-              _envioStatus == 'ENVIADO'
-                  ? 'Formulário já enviado anteriormente'
+              _isReadOnly
+                  ? 'Formulário enviado — somente visualização'
                   : 'Rascunho em edição',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: _envioStatus == 'ENVIADO' ? AppColors.success : AppColors.primary,
+                color: _isReadOnly ? AppColors.success : AppColors.primary,
               ),
               textAlign: TextAlign.center,
             ),
@@ -1069,56 +1099,57 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
             children: _questions.map(_buildQuestionCard).toList(),
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, -3),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _saving ? null : () => _submitForm('RASCUNHO'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('Salvar rascunho'),
+        if (!_isReadOnly)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -3),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _saving ? null : () => _submitForm('RASCUNHO'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Salvar rascunho'),
                   ),
-                  onPressed: _saving ? null : () => _submitForm('ENVIADO'),
-                  child: _saving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: _saving ? null : () => _submitForm('ENVIADO'),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Enviar e Concluir',
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                        )
-                      : const Text(
-                          'Enviar e Concluir',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
